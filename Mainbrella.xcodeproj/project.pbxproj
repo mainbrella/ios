@@ -40,6 +40,8 @@
 		C352ABD78239009A86173004 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CFC9BB07700683C1A310F6 /* AccountView.swift */; };
 		D41F1AABCD9C53D983F6B5FC /* GoogleLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */; };
 		DBD456B2A57747323D28B00E /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B3A43A4758BD3467CC6FFC15 /* GoogleSignInSwift */; };
+		BFA9ADA80AFD758227BF9F51 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4863230E54FB42F501FE57F8 /* WelcomeView.swift */; };
+		C075D674E0D310E08D4FF6A3 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -110,6 +112,8 @@
 		82CFC9BB07700683C1A310F6 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		C7695579679A633F115925B4 /* AuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthClient.swift; sourceTree = "<group>"; };
 		DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleLogin.swift; sourceTree = "<group>"; };
+		4863230E54FB42F501FE57F8 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -167,6 +171,8 @@
 				8DB3BADC68BF3A112E1209B7 /* ShareStore.swift */,
 				06C7B97D2DCF907B8748AD22 /* Theme.swift */,
 				70C439273406A423783E58FB /* Views.swift */,
+				4863230E54FB42F501FE57F8 /* WelcomeView.swift */,
+				57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */,
 				2DC7D46F6CEBBC51E451C110 /* WorkspaceAttachment.swift */,
 				FD165057FECFFCACB7CFD1B9 /* WorkspaceTools.swift */,
 				82CFC9BB07700683C1A310F6 /* AccountView.swift */,
@@ -316,6 +322,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				95F423E3C613FD0F0A436469 /* Assets.xcassets in Resources */,
+				C075D674E0D310E08D4FF6A3 /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -371,6 +378,7 @@
 				8C0201F305EC37D3AC7CFDEE /* ShareStore.swift in Sources */,
 				64442F50EE4FF4FEAB30109E /* Theme.swift in Sources */,
 				73E6101F700857C632EFB7DD /* Views.swift in Sources */,
+				BFA9ADA80AFD758227BF9F51 /* WelcomeView.swift in Sources */,
 				CFB11B020F0C3643135B727B /* WorkspaceAttachment.swift in Sources */,
 				4C2267C3DBF07C106DC5CB99 /* WorkspaceTools.swift in Sources */,
 				C352ABD78239009A86173004 /* AccountView.swift in Sources */,
@@ -465,7 +473,7 @@
 				INFOPLIST_FILE = Mainbrella/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Capture a photo to send with your instruction to a Mainbrella workspace.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
@@ -507,7 +515,7 @@
 				INFOPLIST_FILE = Mainbrella/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Capture a photo to send with your instruction to a Mainbrella workspace.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;

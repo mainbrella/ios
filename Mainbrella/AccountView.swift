@@ -96,6 +96,7 @@ struct AccountView: View {
         .frame(maxWidth: 680).frame(maxWidth: .infinity).background(Theme.background)
         .navigationTitle(store.connected ? "Account" : "Sign in to Mainbrella")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     private var canSubmitEmail: Bool {

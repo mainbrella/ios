@@ -12,13 +12,19 @@ struct RootView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.horizontalSizeClass) private var size
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var destination: Destination = .inbox
+    @State private var showingSplash = true
+    @State private var signInRequired = false
     var body: some View {
         GeometryReader { geometry in
             let inspector = size == .regular && geometry.size.width >= 1100
             Group {
                 if !store.connected {
-                    NavigationStack { AccountView() }
+                    NavigationStack {
+                        if signInRequired { AccountView() }
+                        else { WelcomeView() }
+                    }
                 } else if size == .regular {
                     NavigationSplitView {
                         List(Destination.allCases) { item in
@@ -52,9 +58,24 @@ struct RootView: View {
             .alert("Unable to complete request", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
                 Button("OK") { store.error = nil }
             } message: { Text(store.error ?? "") }
-            .onChange(of: store.connected) { _, _ in destination = .inbox }
+            .onChange(of: store.connected) { wasConnected, connected in
+                destination = .inbox
+                signInRequired = wasConnected && !connected
+            }
             .task(id: LiveSessionIdentity(revision: store.revision, active: scenePhase == .active)) {
                 if scenePhase == .active { await store.followActivity() }
+            }
+            .accessibilityHidden(showingSplash)
+            .allowsHitTesting(!showingSplash)
+            .overlay {
+                if showingSplash { SplashView().transition(.opacity) }
+            }
+            .task {
+                // A short launch transition; account and activity loading run independently.
+                // Never hold the app on a splash while waiting for the network.
+                do { try await Task.sleep(for: .milliseconds(600)) }
+                catch { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showingSplash = false }
             }
         }
     }

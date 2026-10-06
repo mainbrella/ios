@@ -2,7 +2,7 @@
 
 A native SwiftUI human cockpit for cloud agents. Supports iPhone and iPad, iOS 17+.
 
-Open `Mainbrella.xcodeproj`, choose the Mainbrella scheme, and run on an iPhone or iPad simulator. For a physical device, select your development team in Signing & Capabilities. The app opens native sign-in when no account credential is saved. It displays only authenticated account data and does not create or stop cloud machines.
+Open `Mainbrella.xcodeproj`, choose the Mainbrella scheme, and run on an iPhone or iPad simulator. For a physical device, select your development team in Signing & Capabilities. A fresh install opens a marketing welcome page after a brief logo splash. Get started opens native sign-in; a saved account goes straight to Activity. The welcome page introduces the cloud-agent direction from `../mac.plan2.md`, with handoff, persistent agent sessions, approvals, and completion alerts labeled as coming next. It displays only authenticated account data and does not create or stop cloud machines.
 
 ## Current workflows
 

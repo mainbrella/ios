@@ -10,6 +10,7 @@ import XCTest
         if UIDevice.current.userInterfaceIdiom == .pad { XCUIDevice.shared.orientation = .landscapeLeft }
         let app = XCUIApplication()
         app.launch()
+        openSignIn(app)
         XCTAssertTrue(app.buttons["Use an API key"].waitForExistence(timeout: 10))
         app.buttons["Use an API key"].tap()
         guard app.secureTextFields["API key"].waitForExistence(timeout: 10) else {
@@ -153,6 +154,7 @@ import XCTest
             throw XCTSkip("Explicit production credentials and a test-owned workspace are required.")
         }
         let app = XCUIApplication(); app.launch()
+        openSignIn(app)
         XCTAssertTrue(app.buttons["Use an API key"].waitForExistence(timeout: 10))
         app.buttons["Use an API key"].tap()
         guard app.secureTextFields["API key"].waitForExistence(timeout: 10) else {
@@ -192,7 +194,8 @@ import XCTest
         }
         let app = XCUIApplication()
         app.launch()
-        if app.buttons["google-sign-in"].waitForExistence(timeout: 3) && !app.tabBars.firstMatch.exists && !app.buttons["Account"].exists { return }
+        if app.buttons["welcome-get-started"].waitForExistence(timeout: 3) { return }
+        if app.buttons["google-sign-in"].exists && !app.tabBars.firstMatch.exists && !app.buttons["Account"].exists { return }
         if app.tabBars.buttons["Account"].waitForExistence(timeout: 5) { app.tabBars.buttons["Account"].tap() }
         else { app.buttons["Account"].tap() }
         XCTAssertTrue(app.buttons["Remove saved key"].waitForExistence(timeout: 10))
@@ -236,9 +239,52 @@ import XCTest
         return executionID
     }
 
+    private func openSignIn(_ app: XCUIApplication) {
+        let start = app.buttons["welcome-get-started"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10),
+                      "Run account-gate tests on a simulator without a saved account.")
+        start.tap()
+    }
+
+    func testWelcomeToSignInAndBack() throws {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["welcome-get-started"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["welcome-headline"].exists)
+        XCTAssertFalse(app.textFields["login-email"].exists)
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
+        let welcome = XCTAttachment(screenshot: app.screenshot())
+        welcome.name = "Fresh-install welcome"
+        welcome.lifetime = .keepAlways
+        add(welcome)
+        app.buttons["welcome-get-started"].tap()
+        XCTAssertTrue(app.buttons["google-sign-in"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Welcome"].tap()
+        XCTAssertTrue(app.buttons["welcome-get-started"].waitForExistence(timeout: 5))
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["A home for agents that stay with you."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["welcome-get-started"].isHittable)
+    }
+
+    func testWelcomeWithLargeText() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.buttons["welcome-get-started"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["welcome-get-started"].isHittable)
+        XCTAssertTrue(app.staticTexts["welcome-headline"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Welcome with accessibility text"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["welcome-get-started"].tap()
+        XCTAssertTrue(app.navigationBars["Sign in to Mainbrella"].waitForExistence(timeout: 5))
+    }
+
     func testDisconnectedAccountGate() throws {
         let app = XCUIApplication()
         app.launch()
+        openSignIn(app)
         XCTAssertTrue(app.navigationBars["Sign in to Mainbrella"].waitForExistence(timeout: 10),
                       "Run account-gate tests on a simulator without a saved account.")
         XCTAssertTrue(app.buttons["google-sign-in"].isHittable)
@@ -263,6 +309,7 @@ import XCTest
     func testOptionalAPIKeyConnection() throws {
         let app = XCUIApplication()
         app.launch()
+        openSignIn(app)
         XCTAssertTrue(app.buttons["Use an API key"].waitForExistence(timeout: 10))
         app.buttons["Use an API key"].tap()
         XCTAssertTrue(app.secureTextFields["API key"].exists)
@@ -275,6 +322,7 @@ import XCTest
     func testGoogleSignInPresentationAndCancellation() throws {
         let app = XCUIApplication()
         app.launch()
+        openSignIn(app)
         XCTAssertTrue(app.buttons["google-sign-in"].waitForExistence(timeout: 10))
         app.buttons["google-sign-in"].tap()
         let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -293,6 +341,7 @@ import XCTest
         guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Tablet layout check") }
         let app = XCUIApplication()
         app.launch()
+        openSignIn(app)
         XCTAssertTrue(app.navigationBars["Sign in to Mainbrella"].waitForExistence(timeout: 10),
                       "Run account-gate tests on a simulator without a saved account.")
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
@@ -301,6 +350,27 @@ import XCTest
             XCTAssertTrue(app.textFields["login-email"].isHittable)
             XCTAssertTrue(app.secureTextFields["login-password"].isHittable)
             XCTAssertTrue(app.buttons["email-sign-in"].isHittable)
+        }
+    }
+
+    func testTabletWelcomeRotation() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Tablet layout check") }
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["welcome-get-started"].waitForExistence(timeout: 10))
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            XCUIDevice.shared.orientation = orientation
+            let layout = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                let frame = app.frame
+                return orientation == .portrait ? frame.height > frame.width : frame.width > frame.height
+            }, object: app)
+            XCTAssertEqual(XCTWaiter.wait(for: [layout], timeout: 5), .completed)
+            XCTAssertTrue(app.staticTexts["welcome-headline"].isHittable)
+            XCTAssertTrue(app.buttons["welcome-get-started"].isHittable)
+            let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            screenshot.name = "iPad welcome \(orientation == .portrait ? "portrait" : "landscape")"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
         }
     }
 }
