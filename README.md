@@ -2,9 +2,11 @@
 
 A native SwiftUI human cockpit for cloud agents. Supports iPhone and iPad, iOS 17+.
 
-Open `Mainbrella.xcodeproj`, choose the Mainbrella scheme, and run on an iPhone or iPad simulator. For a physical device, select your development team in Signing & Capabilities. A fresh install opens a marketing welcome page after a brief logo splash. Get started opens native sign-in; a saved account goes straight to Activity. The welcome page introduces the cloud-agent direction from `../mac.plan2.md`, with handoff, persistent agent sessions, approvals, and completion alerts labeled as coming next. It displays only authenticated account data and does not create or stop cloud machines.
+Open `Mainbrella.xcodeproj`, choose the Mainbrella scheme, and run on an iPhone or iPad simulator. For a physical device, select your development team in Signing & Capabilities. A fresh install opens a marketing welcome page after a brief logo splash. Get started opens native sign-in; a saved account goes straight to Workspace. The welcome page introduces the cloud-agent direction from `../mac.plan2.md`, with handoff, persistent agent sessions, approvals, and completion alerts labeled as coming next. It displays only authenticated account data and does not create or stop cloud machines.
 
 ## Current workflows
+
+- **Workspace:** local tabs with independent prompt drafts and execution selections, speech dictation, attachments, and protected preview access.
 
 - **Activity:** real managed executions grouped into Needs review, Working, and Finished. Open an execution to inspect stdout, stderr, status, and exit code, copy output to the iPhone clipboard, or share it through the native share sheet. Lists update from the account activity WebSocket. Open details reload on execution status changes, reconnection, or a manual refresh; stdout is not streamed per chunk.
 - **Projects:** live running containers, exact generation identity, and lease expiry.
@@ -46,7 +48,7 @@ Feedback uploads use a stable UUID for a retry within the editor. The JPEG is up
 
 Text/photo/share messages use the same completion pattern with `message-<UUID>.json`. Each message includes `version`, `createdAt`, `workspaceID`, exact `generation`, `source` (`ios-text`, `ios-photo`, `ios-camera`, `ios-file`, or `ios-share`), `instruction`, `text`, and an optional `attachment` filename relative to `/workspace/inbox`. Camera/file handoffs also include `attachmentName` for the original display name. Upload paths use generated UUID filenames with safe extensions, never the original name. Handoffs save files; they do not launch processes or claim an agent has resumed. Share attachments are JPEGs, at most 2048 pixels on their longest edge and 1 MiB encoded. Shared text is limited to 256 KiB before metadata encoding. The share extension does not accept files, multiple images, or videos. The main app accepts a single file; attaching a ZIP saves it to the inbox and does not extract it or create a workspace.
 
-This version **does not dispatch an agent automatically**. The production activity WebSocket was verified on October 6, 2026. The terminal WebSocket still requires a browser session cookie. There is no agent approval queue, Mainbrella device push registration, or agent-message endpoint. Live updates work in the foreground; background alerts and approvals need a backend push/approval contract. Network tracing, touch replay, voice capture, Live Activities, and Watch support remain future work. Physical camera capture requires verification on an iPhone; simulator checks cover photo resizing/encoding; camera controls are hidden where capture is unavailable.
+This version **does not dispatch an agent automatically**. The production activity WebSocket was verified on October 6, 2026. The terminal WebSocket still requires a browser session cookie. There is no agent approval queue, Mainbrella device push registration, or agent-message endpoint. Live updates work in the foreground; background alerts and approvals need a backend push/approval contract. Network tracing, touch replay, Live Activities, and Watch support remain future work. Physical camera capture requires verification on an iPhone; simulator checks cover photo resizing/encoding; camera controls are hidden where capture is unavailable.
 
 ## Mac Companion alignment
 
@@ -86,3 +88,11 @@ Production UI checks require an initially disconnected simulator and remove the 
 If an interrupted UI run leaves a test key behind, remove it from **Account** on that dedicated test simulator. The optional `testRemoveSmokeAccount` UI test does the same when explicitly enabled with `TEST_RUNNER_MAINBRELLA_REMOVE_SMOKE_ACCOUNT=1`; it is skipped during ordinary test runs.
 
 The existing `1024.png` is used for the app icon; the original file is preserved.
+
+## Signed-in workspace
+
+Workspace is the default signed-in screen. Open multiple local tabs onto running Linux workspaces; each retains its draft and selected execution while navigating within the app. Tabs are views, not separate Codex processes, and are cleared when the account changes or the app exits. Closing a tab confirms draft discard and leaves cloud work running. Execution output follows the existing foreground activity stream. Workspace generation checks prevent sending to a replacement machine.
+
+Dictate requests microphone and speech permissions on first use, appends editable transcription to the current draft, and never sends automatically. Recording stops on tab changes, backgrounding, audio interruptions, or workspace unavailability. Apple speech recognition may process audio remotely. Verify microphone capture, interruptions, and permission denial on a physical device.
+
+Send uses the existing inbox completion-marker transport and preserves message identity on an unchanged retry. There is no per-tab agent routing or automatic Codex dispatch. Attachments use the existing handoff editor. Ask the agent to start a web server, open its port in Preview, then capture, annotate, and upload feedback; previews can also open in Safari and appear beside the workspace on wide iPads. Android builds/rendering depend on tools installed on the cloud machine; no Android emulator viewer is added here. Cloud machines cannot run Xcode or iOS simulators.

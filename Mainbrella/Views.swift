@@ -1,10 +1,10 @@
 import SwiftUI
 
 enum Destination: String, CaseIterable, Identifiable {
-    case inbox = "Activity", projects = "Projects", previews = "Previews", account = "Account"
+    case console = "Workspace", inbox = "Activity", projects = "Projects", previews = "Previews", account = "Account"
     var id: String { rawValue }
     var symbol: String {
-        switch self { case .inbox: "tray"; case .projects: "folder"; case .previews: "rectangle.on.rectangle"; case .account: "person.crop.circle" }
+        switch self { case .console: "terminal"; case .inbox: "tray"; case .projects: "folder"; case .previews: "rectangle.on.rectangle"; case .account: "person.crop.circle" }
     }
 }
 
@@ -13,7 +13,8 @@ struct RootView: View {
     @Environment(\.horizontalSizeClass) private var size
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var destination: Destination = .inbox
+    @State private var destination: Destination = .console
+    @StateObject private var console = ConsoleTabs()
     @State private var showingSplash = true
     @State private var signInRequired = false
     var body: some View {
@@ -52,6 +53,8 @@ struct RootView: View {
                 }
             }
             .background(Theme.background)
+            .environmentObject(console)
+            .onChange(of: store.revision) { _, _ in console.reset() }
             .sheet(item: Binding(get: { inspector && destination != .account ? nil : store.preview }, set: { store.preview = $0 })) { preview in
                 NavigationStack { PreviewView(session: preview) }.environmentObject(store)
             }
@@ -59,7 +62,7 @@ struct RootView: View {
                 Button("OK") { store.error = nil }
             } message: { Text(store.error ?? "") }
             .onChange(of: store.connected) { wasConnected, connected in
-                destination = .inbox
+                destination = .console
                 signInRequired = wasConnected && !connected && store.authenticationError != nil
             }
             .task(id: LiveSessionIdentity(revision: store.revision, active: scenePhase == .active)) {
@@ -82,6 +85,7 @@ struct RootView: View {
     @ViewBuilder private var content: some View { screen(destination) }
     @ViewBuilder private func screen(_ destination: Destination) -> some View {
         switch destination {
+        case .console: ConsoleView()
         case .inbox: InboxView()
         case .projects: WorkspacesView(previewsOnly: false)
         case .previews: WorkspacesView(previewsOnly: true)

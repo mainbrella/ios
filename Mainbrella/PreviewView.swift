@@ -132,6 +132,7 @@ struct FeedbackReport: Codable {
 struct PreviewView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     let session: PreviewSession
     var embedded = false
     @StateObject private var controller = PreviewController()
@@ -148,6 +149,7 @@ struct PreviewView: View {
                     Text("Protected preview · expires \(session.expiresAt.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(Theme.muted)
                 }
                 Spacer()
+                Button { openURL(session.url) } label: { Image(systemName: "safari").frame(width: 44, height: 44) }.accessibilityLabel("Open preview in Safari")
                 Button { controller.load(session) } label: { Image(systemName: "arrow.clockwise").frame(width: 44, height: 44) }.accessibilityLabel("Reload preview")
             }.padding(.horizontal, 16).padding(.vertical, 8)
             ZStack {

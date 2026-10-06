@@ -8,6 +8,7 @@ struct ExecutionView: View {
     @EnvironmentObject private var store: AppStore
     let workspace: Workspace
     let execution: Execution
+    var embedded = false
     @State private var detail: ExecutionDetail?
     @State private var loading = false
     @State private var failure: String?
@@ -22,7 +23,7 @@ struct ExecutionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(workspace.name).font(.headline)
+                if !embedded { Text(workspace.name).font(.headline) }
                 HStack {
                     Text((detail?.execution ?? execution).statusLabel)
                     if let code = detail?.execution.exitCode ?? execution.exitCode { Text("· Exit \(code)") }
@@ -62,7 +63,7 @@ struct ExecutionView: View {
                 }.disabled(text.isEmpty)
             }
         }.padding(16).frame(maxWidth: 800).frame(maxWidth: .infinity).background(Theme.background)
-            .navigationTitle("Execution").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(embedded ? "Workspace" : "Execution").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { await load() } } label: {
@@ -107,6 +108,13 @@ struct WorkspaceInboxView: View {
     @State private var failure: String?
     @State private var attempt: InboxAttempt?
     @FocusState private var editing: Bool
+    private let onSent: (() -> Void)?
+
+    init(workspace: Workspace, instruction: String = "", onSent: (() -> Void)? = nil) {
+        self.workspace = workspace
+        _instruction = State(initialValue: instruction)
+        self.onSent = onSent
+    }
 
     var body: some View {
         Form {
@@ -255,6 +263,7 @@ struct WorkspaceInboxView: View {
             guard let attempt else { return }
             try await store.api.sendInbox(attempt.message, attachment: attempt.draft.attachment?.data, id: attempt.id, workspace: workspace)
             sent = true
+            onSent?()
         } catch { failure = error.localizedDescription + " Your input is still here; try again." }
     }
 }

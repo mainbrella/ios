@@ -8,11 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		011AE3B1284702BD93A22170 /* ActivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3A764FA3BA06C898F35705 /* ActivityTests.swift */; };
+		0693068365FEF4FC7885BBEE /* AuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7695579679A633F115925B4 /* AuthClient.swift */; };
+		105624E757FE802AE72A6D5E /* AuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193C129956342695BE47F6BE /* AuthTests.swift */; };
 		17E1816D3B2ACFC507DA6CB5 /* ShareTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C18E1CF344A0BFCB04856C /* ShareTests.swift */; };
 		18F42EC39C262BC8E8C4C4FE /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D34824E776A962799FCBD4 /* Models.swift */; };
 		28D55FC846CF877BE6D23A78 /* SharePayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112C1E1A46E7D4960CEC3148 /* SharePayload.swift */; };
 		290672D078598461F7DDC186 /* MainbrellaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E80997B0267F5698CBBB61 /* MainbrellaUITests.swift */; };
 		37A41E8DE3746A0FEAE9A50D /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D34824E776A962799FCBD4 /* Models.swift */; };
+		3CAE66197CE27E2186DE2E3E /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 385ED622A5F018E7FA2ACAA4 /* GoogleSignIn */; };
+		443767BB8142A2DA74AF8EC2 /* PromptSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9149E6717DBA6C96D4C69020 /* PromptSpeech.swift */; };
 		4C2267C3DBF07C106DC5CB99 /* WorkspaceTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD165057FECFFCACB7CFD1B9 /* WorkspaceTools.swift */; };
 		59EE6403941A06D1E3C00F8A /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD4912731F4CFB911B2D560A /* APIClientTests.swift */; };
 		64442F50EE4FF4FEAB30109E /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06C7B97D2DCF907B8748AD22 /* Theme.swift */; };
@@ -26,22 +30,21 @@
 		8C0201F305EC37D3AC7CFDEE /* ShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DB3BADC68BF3A112E1209B7 /* ShareStore.swift */; };
 		95F423E3C613FD0F0A436469 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3BD736C94C3F43D45D03A9F1 /* Assets.xcassets */; };
 		9780C309FAE718FB01A531C5 /* InboxAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA30E9C6C371A02FC7E98C8E /* InboxAttachment.swift */; };
+		A4A90C2988D25B95F9CC3441 /* ConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C14B24806C655833739497A7 /* ConsoleView.swift */; };
+		BFA9ADA80AFD758227BF9F51 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4863230E54FB42F501FE57F8 /* WelcomeView.swift */; };
+		C075D674E0D310E08D4FF6A3 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */; };
+		C352ABD78239009A86173004 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CFC9BB07700683C1A310F6 /* AccountView.swift */; };
 		CCAD223FBE202555804638DA /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F3D46EC596EF477E2CB2695 /* APIClient.swift */; };
 		CFB11B020F0C3643135B727B /* WorkspaceAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC7D46F6CEBBC51E451C110 /* WorkspaceAttachment.swift */; };
+		D41F1AABCD9C53D983F6B5FC /* GoogleLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */; };
+		D53C79C02AD96B290B56C142 /* ConsoleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5ECE1411DE922EF20CC3968 /* ConsoleTests.swift */; };
 		D7544A89B23CA574BEA7B93C /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F95E06FE1753978E4A5FF4 /* ShareViewController.swift */; };
 		D8A9F120C0B276A992B17908 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F3D46EC596EF477E2CB2695 /* APIClient.swift */; };
 		DB8AA6F1895457FA0D862445 /* ActivityStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11E88D59967F2560B6A73E92 /* ActivityStream.swift */; };
+		DBD456B2A57747323D28B00E /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B3A43A4758BD3467CC6FFC15 /* GoogleSignInSwift */; };
 		DDAB3295CEB33F13A8A93555 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB4ACC46E82DEB6ADDBAC39 /* PreviewView.swift */; };
 		DF0EB591E0B1E1B37BCC2917 /* InboxAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA30E9C6C371A02FC7E98C8E /* InboxAttachment.swift */; };
 		E82346F03595F5654CB12271 /* MainbrellaShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1F8A31D8BEB179371302E39A /* MainbrellaShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		0693068365FEF4FC7885BBEE /* AuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7695579679A633F115925B4 /* AuthClient.swift */; };
-		105624E757FE802AE72A6D5E /* AuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193C129956342695BE47F6BE /* AuthTests.swift */; };
-		3CAE66197CE27E2186DE2E3E /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 385ED622A5F018E7FA2ACAA4 /* GoogleSignIn */; };
-		C352ABD78239009A86173004 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CFC9BB07700683C1A310F6 /* AccountView.swift */; };
-		D41F1AABCD9C53D983F6B5FC /* GoogleLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */; };
-		DBD456B2A57747323D28B00E /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B3A43A4758BD3467CC6FFC15 /* GoogleSignInSwift */; };
-		BFA9ADA80AFD758227BF9F51 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4863230E54FB42F501FE57F8 /* WelcomeView.swift */; };
-		C075D674E0D310E08D4FF6A3 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -88,33 +91,48 @@
 		112C1E1A46E7D4960CEC3148 /* SharePayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePayload.swift; sourceTree = "<group>"; };
 		11E88D59967F2560B6A73E92 /* ActivityStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityStream.swift; sourceTree = "<group>"; };
 		15E5FC29F2E5C57CDDC3040B /* MainbrellaTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MainbrellaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		1F8A31D8BEB179371302E39A /* MainbrellaShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MainbrellaShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		193C129956342695BE47F6BE /* AuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthTests.swift; sourceTree = "<group>"; };
+		1F8A31D8BEB179371302E39A /* MainbrellaShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MainbrellaShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C3A764FA3BA06C898F35705 /* ActivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityTests.swift; sourceTree = "<group>"; };
 		2DC7D46F6CEBBC51E451C110 /* WorkspaceAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAttachment.swift; sourceTree = "<group>"; };
 		3BD736C94C3F43D45D03A9F1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		40D34824E776A962799FCBD4 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		4863230E54FB42F501FE57F8 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		4E828FB9B66A0E9D6D24D6B4 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
 		4F3D46EC596EF477E2CB2695 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		70C439273406A423783E58FB /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		7EB4ACC46E82DEB6ADDBAC39 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
+		82CFC9BB07700683C1A310F6 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		8DB3BADC68BF3A112E1209B7 /* ShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareStore.swift; sourceTree = "<group>"; };
+		9149E6717DBA6C96D4C69020 /* PromptSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptSpeech.swift; sourceTree = "<group>"; };
 		92F95E06FE1753978E4A5FF4 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
-		9AC5F495BA6E19342E8F9BFD /* Mainbrella.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mainbrella.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9AC5F495BA6E19342E8F9BFD /* Mainbrella.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Mainbrella.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A5ECE1411DE922EF20CC3968 /* ConsoleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleTests.swift; sourceTree = "<group>"; };
 		B29D75F521567591FF80E96E /* MainbrellaShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MainbrellaShare.entitlements; sourceTree = "<group>"; };
 		B4E80997B0267F5698CBBB61 /* MainbrellaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainbrellaUITests.swift; sourceTree = "<group>"; };
 		BD4912731F4CFB911B2D560A /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
+		C14B24806C655833739497A7 /* ConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleView.swift; sourceTree = "<group>"; };
 		C6128933EE462488D2D26B33 /* WorkspaceAttachmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAttachmentTests.swift; sourceTree = "<group>"; };
+		C7695579679A633F115925B4 /* AuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthClient.swift; sourceTree = "<group>"; };
 		CA30E9C6C371A02FC7E98C8E /* InboxAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxAttachment.swift; sourceTree = "<group>"; };
+		DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleLogin.swift; sourceTree = "<group>"; };
 		E9C18E1CF344A0BFCB04856C /* ShareTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareTests.swift; sourceTree = "<group>"; };
 		FCA9FAAB713EBF3FA1D8FA2B /* MainbrellaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MainbrellaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FD165057FECFFCACB7CFD1B9 /* WorkspaceTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTools.swift; sourceTree = "<group>"; };
-		193C129956342695BE47F6BE /* AuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthTests.swift; sourceTree = "<group>"; };
-		82CFC9BB07700683C1A310F6 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
-		C7695579679A633F115925B4 /* AuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthClient.swift; sourceTree = "<group>"; };
-		DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleLogin.swift; sourceTree = "<group>"; };
-		4863230E54FB42F501FE57F8 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
-		57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		41C4ACB5019684D7BFEA635A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3CAE66197CE27E2186DE2E3E /* GoogleSignIn in Frameworks */,
+				DBD456B2A57747323D28B00E /* GoogleSignInSwift in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0099950B4E77F06F4D6A5268 /* MainbrellaUITests */ = {
@@ -159,25 +177,27 @@
 		D1537FD6A7209C47B5F81C56 /* Mainbrella */ = {
 			isa = PBXGroup;
 			children = (
+				82CFC9BB07700683C1A310F6 /* AccountView.swift */,
 				11E88D59967F2560B6A73E92 /* ActivityStream.swift */,
 				4F3D46EC596EF477E2CB2695 /* APIClient.swift */,
 				4E828FB9B66A0E9D6D24D6B4 /* AppStore.swift */,
 				3BD736C94C3F43D45D03A9F1 /* Assets.xcassets */,
+				C7695579679A633F115925B4 /* AuthClient.swift */,
+				C14B24806C655833739497A7 /* ConsoleView.swift */,
+				DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */,
 				CA30E9C6C371A02FC7E98C8E /* InboxAttachment.swift */,
+				57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */,
 				0C3FE51898996659D486570C /* Mainbrella.entitlements */,
 				40D34824E776A962799FCBD4 /* Models.swift */,
 				7EB4ACC46E82DEB6ADDBAC39 /* PreviewView.swift */,
+				9149E6717DBA6C96D4C69020 /* PromptSpeech.swift */,
 				112C1E1A46E7D4960CEC3148 /* SharePayload.swift */,
 				8DB3BADC68BF3A112E1209B7 /* ShareStore.swift */,
 				06C7B97D2DCF907B8748AD22 /* Theme.swift */,
 				70C439273406A423783E58FB /* Views.swift */,
 				4863230E54FB42F501FE57F8 /* WelcomeView.swift */,
-				57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */,
 				2DC7D46F6CEBBC51E451C110 /* WorkspaceAttachment.swift */,
 				FD165057FECFFCACB7CFD1B9 /* WorkspaceTools.swift */,
-				82CFC9BB07700683C1A310F6 /* AccountView.swift */,
-				C7695579679A633F115925B4 /* AuthClient.swift */,
-				DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */,
 			);
 			path = Mainbrella;
 			sourceTree = "<group>";
@@ -187,9 +207,10 @@
 			children = (
 				2C3A764FA3BA06C898F35705 /* ActivityTests.swift */,
 				BD4912731F4CFB911B2D560A /* APIClientTests.swift */,
+				193C129956342695BE47F6BE /* AuthTests.swift */,
+				A5ECE1411DE922EF20CC3968 /* ConsoleTests.swift */,
 				E9C18E1CF344A0BFCB04856C /* ShareTests.swift */,
 				C6128933EE462488D2D26B33 /* WorkspaceAttachmentTests.swift */,
-				193C129956342695BE47F6BE /* AuthTests.swift */,
 			);
 			path = MainbrellaTests;
 			sourceTree = "<group>";
@@ -220,8 +241,8 @@
 			buildPhases = (
 				CEDC00218899D836AAFB57DB /* Sources */,
 				C323DEDDC3252AAF33C8D2CF /* Resources */,
-				2937D2EFF7E297B24C6A6977 /* Embed Foundation Extensions */,
 				41C4ACB5019684D7BFEA635A /* Frameworks */,
+				2937D2EFF7E297B24C6A6977 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
@@ -282,6 +303,12 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					21E51EE3637E191C94B96ACA = {
+						DevelopmentTeam = "";
+					};
+					49A83DE100E35DEDAC0B3842 = {
+						DevelopmentTeam = "";
+					};
 					BD731EFD6A6FF0A02CDAA2F5 = {
 						DevelopmentTeam = "";
 					};
@@ -300,6 +327,9 @@
 			);
 			mainGroup = 7C01370E63E417914784A983;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B3B70798E3D427787137BDAA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8EBE13E01CC837C6387D16E6 /* Products */;
 			projectDirPath = "";
@@ -309,9 +339,6 @@
 				21E51EE3637E191C94B96ACA /* MainbrellaShare */,
 				BD731EFD6A6FF0A02CDAA2F5 /* MainbrellaTests */,
 				C13425AA51DD5F4A16A4B41F /* MainbrellaUITests */,
-			);
-			packageReferences = (
-				B3B70798E3D427787137BDAA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 		};
 /* End PBXProject section */
@@ -358,9 +385,10 @@
 			files = (
 				59EE6403941A06D1E3C00F8A /* APIClientTests.swift in Sources */,
 				011AE3B1284702BD93A22170 /* ActivityTests.swift in Sources */,
+				105624E757FE802AE72A6D5E /* AuthTests.swift in Sources */,
+				D53C79C02AD96B290B56C142 /* ConsoleTests.swift in Sources */,
 				17E1816D3B2ACFC507DA6CB5 /* ShareTests.swift in Sources */,
 				72CD2F27103848435D4821C9 /* WorkspaceAttachmentTests.swift in Sources */,
-				105624E757FE802AE72A6D5E /* AuthTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,11 +397,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				CCAD223FBE202555804638DA /* APIClient.swift in Sources */,
+				C352ABD78239009A86173004 /* AccountView.swift in Sources */,
 				DB8AA6F1895457FA0D862445 /* ActivityStream.swift in Sources */,
 				6A99E2DA002A7DC94678F2EA /* AppStore.swift in Sources */,
+				0693068365FEF4FC7885BBEE /* AuthClient.swift in Sources */,
+				A4A90C2988D25B95F9CC3441 /* ConsoleView.swift in Sources */,
+				D41F1AABCD9C53D983F6B5FC /* GoogleLogin.swift in Sources */,
 				DF0EB591E0B1E1B37BCC2917 /* InboxAttachment.swift in Sources */,
 				37A41E8DE3746A0FEAE9A50D /* Models.swift in Sources */,
 				DDAB3295CEB33F13A8A93555 /* PreviewView.swift in Sources */,
+				443767BB8142A2DA74AF8EC2 /* PromptSpeech.swift in Sources */,
 				28D55FC846CF877BE6D23A78 /* SharePayload.swift in Sources */,
 				8C0201F305EC37D3AC7CFDEE /* ShareStore.swift in Sources */,
 				64442F50EE4FF4FEAB30109E /* Theme.swift in Sources */,
@@ -381,9 +414,6 @@
 				BFA9ADA80AFD758227BF9F51 /* WelcomeView.swift in Sources */,
 				CFB11B020F0C3643135B727B /* WorkspaceAttachment.swift in Sources */,
 				4C2267C3DBF07C106DC5CB99 /* WorkspaceTools.swift in Sources */,
-				C352ABD78239009A86173004 /* AccountView.swift in Sources */,
-				0693068365FEF4FC7885BBEE /* AuthClient.swift in Sources */,
-				D41F1AABCD9C53D983F6B5FC /* GoogleLogin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -413,7 +443,6 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = MainbrellaShare/MainbrellaShare.entitlements;
-				DEVELOPMENT_TEAM = 755R3VBZ84;
 				INFOPLIST_FILE = MainbrellaShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -448,7 +477,6 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = MainbrellaShare/MainbrellaShare.entitlements;
-				DEVELOPMENT_TEAM = 755R3VBZ84;
 				INFOPLIST_FILE = MainbrellaShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -468,20 +496,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Mainbrella/Mainbrella.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 755R3VBZ84;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mainbrella/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Capture a photo to send with your instruction to a Mainbrella workspace.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mainbrella.ios;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -510,20 +533,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Mainbrella/Mainbrella.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 755R3VBZ84;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mainbrella/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "Capture a photo to send with your instruction to a Mainbrella workspace.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mainbrella.ios;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -742,17 +760,6 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
-/* Begin PBXFrameworksBuildPhase section */
-		41C4ACB5019684D7BFEA635A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				3CAE66197CE27E2186DE2E3E /* GoogleSignIn in Frameworks */,
-				DBD456B2A57747323D28B00E /* GoogleSignInSwift in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
 
 /* Begin XCRemoteSwiftPackageReference section */
 		B3B70798E3D427787137BDAA /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
@@ -777,7 +784,6 @@
 			productName = GoogleSignInSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
-
 	};
 	rootObject = 86862591EE6CBAA464ADB88F /* Project object */;
 }

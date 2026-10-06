@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dictate prompts for your cloud workspace.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Turn your spoken prompts into editable text. Audio may be processed by Apple’s speech recognition service.</string>
 	<key>GIDClientID</key>
 	<string>854186419005-tc4r5t0se5m0hrfc2a66ipndei6tprgu.apps.googleusercontent.com</string>
 	<key>GIDServerClientID</key>
