@@ -19,6 +19,7 @@ enum Destination: String, CaseIterable, Identifiable {
 struct RootView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.horizontalSizeClass) private var size
+    @Environment(\.scenePhase) private var scenePhase
     @State private var destination: Destination = .inbox
     var body: some View {
         GeometryReader { geometry in
@@ -61,6 +62,9 @@ struct RootView: View {
             } message: { Text(store.error ?? "") }
             .onChange(of: store.connected) { _, _ in destination = .inbox }
             .task { await store.refresh() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await store.refresh() } }
+            }
         }
     }
     @ViewBuilder private var content: some View { screen(destination) }
@@ -82,8 +86,8 @@ struct SectionLabel: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: symbol).foregroundStyle(color)
-            Text(title).font(.title3.weight(.semibold))
-            Text("\(count)").font(.caption.weight(.semibold)).padding(.horizontal, 8).padding(.vertical, 4).background(.white.opacity(0.07), in: Capsule())
+            Text(title).font(.subheadline.weight(.semibold))
+            Text("\(count)").font(.caption).foregroundStyle(Theme.muted)
             Spacer()
         }.accessibilityElement(children: .combine)
     }
@@ -100,16 +104,20 @@ struct InboxView: View {
                 if store.loading && !store.hasLoaded { ProgressView("Loading activity…") }
                 if store.hasLoaded {
                     let jobs = store.jobs.values.flatMap { $0 }
-                    if jobs.isEmpty {
+                    if jobs.isEmpty && store.syncError == nil {
                         Text("No execution activity yet.").foregroundStyle(Theme.muted)
                     } else {
+                        if jobs.contains(where: \.needsReview) {
+                            SectionLabel(title: "Needs review", symbol: "exclamationmark.circle", color: .orange, count: jobs.filter(\.needsReview).count)
+                            executionRows(group: .review)
+                        }
                         if jobs.contains(where: \.running) {
                             SectionLabel(title: "Working", symbol: "circle.fill", color: Theme.blue, count: jobs.filter(\.running).count)
-                            executionRows(running: true)
+                            executionRows(group: .working)
                         }
-                        if jobs.contains(where: { !$0.running }) {
-                            SectionLabel(title: "Finished", symbol: "checkmark.circle", color: Theme.muted, count: jobs.filter { !$0.running }.count)
-                            executionRows(running: false)
+                        if jobs.contains(where: { !$0.running && !$0.needsReview }) {
+                            SectionLabel(title: "Finished", symbol: "checkmark.circle", color: Theme.muted, count: jobs.filter { !$0.running && !$0.needsReview }.count)
+                            executionRows(group: .finished)
                         }
                     }
                 }
@@ -117,20 +125,28 @@ struct InboxView: View {
         }.background(Theme.background).navigationTitle("Activity").navigationBarTitleDisplayMode(.inline)
             .refreshable { await store.refresh() }
     }
-    @ViewBuilder private func executionRows(running: Bool) -> some View {
+    private enum JobGroup { case review, working, finished
+        func includes(_ job: Execution) -> Bool {
+            switch self { case .review: job.needsReview; case .working: job.running; case .finished: !job.running && !job.needsReview }
+        }
+    }
+    @ViewBuilder private func executionRows(group: JobGroup) -> some View {
         ForEach(store.workspaces) { space in
-            ForEach(store.jobs[space.id, default: []].filter { $0.running == running }) { job in
-                HStack(spacing: 12) {
+            ForEach(store.jobs[space.id, default: []].filter { group.includes($0) }) { job in
+                NavigationLink {
+                    ExecutionView(workspace: space, execution: job)
+                } label: { HStack(spacing: 12) {
                     SymbolTile(symbol: job.running ? "terminal" : job.status == "succeeded" ? "checkmark" : "exclamationmark.circle",
                                color: job.running ? Theme.blue : job.status == "succeeded" ? Theme.green : .orange)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(space.name).font(.subheadline.weight(.semibold))
-                        Text("Execution \(job.id.prefix(8)) · \(job.status.replacingOccurrences(of: "_", with: " "))")
+                        Text("\(job.statusLabel) · \(job.id.prefix(8))")
                             .font(.caption).foregroundStyle(Theme.muted)
                     }
                     Spacer()
-                    if running { ProgressView().accessibilityLabel("Execution running") }
-                }.padding(.vertical, 8)
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.muted)
+                }.padding(.vertical, 8).contentShape(Rectangle()) }.buttonStyle(.plain)
+                    .accessibilityIdentifier("execution-\(space.id)-\(job.id)")
             }
         }
     }
@@ -159,6 +175,8 @@ struct WorkspacesView: View {
     @State private var selected: Workspace?
     @State private var port = "3000"
     @State private var showPort = false
+    @State private var inboxWorkspace: Workspace?
+    @State private var revocation: PreviewRevocation?
     var body: some View {
         List {
             if let error = store.syncError { Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
@@ -176,11 +194,14 @@ struct WorkspacesView: View {
                     if !previewsOnly {
                         LabeledContent("Workspace", value: workspace.id).font(.caption)
                         LabeledContent("Expires", value: formatted(workspace.expiresAt)).font(.caption)
+                        Button { inboxWorkspace = workspace } label: {
+                            Label("Send text or photo", systemImage: "paperplane").frame(minHeight: 44)
+                        }.disabled(workspace.status != "running").accessibilityIdentifier("send-inbox-\(workspace.id)")
                     }
                     Button { selected = workspace; showPort = true } label: {
                         Label(store.previewBusy ? "Opening preview…" : "Open preview", systemImage: "arrow.up.right.square")
                             .frame(minHeight: 44)
-                    }.disabled(store.previewBusy || workspace.status != "running")
+                    }.disabled(store.previewBusy || workspace.status != "running").accessibilityIdentifier("open-preview-\(workspace.id)")
                     ForEach(store.grants[workspace.id, default: []]) { grant in
                         HStack {
                             VStack(alignment: .leading) {
@@ -188,7 +209,7 @@ struct WorkspacesView: View {
                                 Text("Expires \(Date(timeIntervalSince1970: grant.expiresAt / 1000).formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(Theme.muted)
                             }
                             Spacer()
-                            Button("Revoke", role: .destructive) { Task { await store.revoke(workspace, grant: grant) } }.frame(minHeight: 44)
+                            Button("Revoke", role: .destructive) { revocation = PreviewRevocation(workspace: workspace, grant: grant) }.frame(minHeight: 44)
                         }
                     }
                 }.listRowBackground(Theme.surface)
@@ -196,6 +217,14 @@ struct WorkspacesView: View {
         }.scrollContentBackground(.hidden).background(Theme.background)
             .navigationTitle(previewsOnly ? "Previews" : "Projects").navigationBarTitleDisplayMode(.inline)
             .refreshable { await store.refresh() }
+            .sheet(item: $inboxWorkspace) { workspace in
+                NavigationStack { WorkspaceInboxView(workspace: workspace) }.environmentObject(store)
+            }
+            .confirmationDialog("Revoke protected preview?", isPresented: Binding(get: { revocation != nil }, set: { if !$0 { revocation = nil } }), titleVisibility: .visible) {
+                if let item = revocation {
+                    Button("Revoke port \(item.grant.port)", role: .destructive) { Task { await store.revoke(item.workspace, grant: item.grant) }; revocation = nil }
+                }
+            } message: { Text("Anyone using this link will lose access.") }
             .alert("Open preview", isPresented: $showPort) {
                 TextField("Port", text: $port).keyboardType(.numberPad)
                 Button("Open") {
@@ -210,6 +239,11 @@ struct WorkspacesView: View {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: value)?.formatted(date: .omitted, time: .shortened) ?? value
     }
+}
+
+private struct PreviewRevocation {
+    let workspace: Workspace
+    let grant: PreviewGrant
 }
 
 struct AccountView: View {

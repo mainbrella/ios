@@ -18,6 +18,21 @@ import PencilKit
           window.addEventListener('unhandledrejection', e => report('rejection: ' + String(e.reason)));
           const original = console.error;
           console.error = (...args) => { report('console.error: ' + args.map(String).join(' ')); original.apply(console, args); };
+          const warn = console.warn;
+          console.warn = (...args) => { report('console.warn: ' + args.map(String).join(' ')); warn.apply(console, args); };
+          const fetch = window.fetch;
+          window.fetch = function(...args) {
+            return fetch.apply(this, args).then(response => {
+              if (!response.ok) report('fetch: HTTP ' + response.status + ' ' + response.url);
+              return response;
+            }, error => { report('fetch failed: ' + String(error)); throw error; });
+          };
+          const send = XMLHttpRequest.prototype.send;
+          XMLHttpRequest.prototype.send = function(...args) {
+            this.addEventListener('error', () => report('XHR network failure: ' + this.responseURL), { once: true });
+            this.addEventListener('load', () => { if (this.status >= 400) report('XHR: HTTP ' + this.status + ' ' + this.responseURL); }, { once: true });
+            return send.apply(this, args);
+          };
         })();
         """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         configuration.userContentController = controller
@@ -40,7 +55,7 @@ import PencilKit
         if messages.count > 50 { messages.removeFirst(messages.count - 50) }
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading = false; failure = nil }
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { loading = true; failure = nil }
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { loading = true; failure = nil; messages = [] }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed(error) }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(error) }
     private func failed(_ error: Error) {
@@ -50,6 +65,23 @@ import PencilKit
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         let scheme = navigationAction.request.url?.scheme
         decisionHandler(scheme == "https" || scheme == "about" ? .allow : .cancel)
+    }
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if let response = navigationResponse.response as? HTTPURLResponse, response.statusCode >= 400 {
+            messages.append("Navigation: HTTP \(response.statusCode)")
+        }
+        decisionHandler(.allow)
+    }
+    func pageMetrics() async -> [String: Double] {
+        let script = """
+        (() => ({width: innerWidth, height: innerHeight, scrollX, scrollY,
+          documentWidth: document.documentElement.scrollWidth,
+          documentHeight: document.documentElement.scrollHeight,
+          visualWidth: visualViewport?.width ?? innerWidth,
+          visualHeight: visualViewport?.height ?? innerHeight,
+          visualScale: visualViewport?.scale ?? 1, pixelRatio: devicePixelRatio}))()
+        """
+        return (try? await webView.evaluateJavaScript(script)) as? [String: Double] ?? [:]
     }
     func capture() async throws -> UIImage {
         let config = WKSnapshotConfiguration()
@@ -92,6 +124,7 @@ struct FeedbackReport: Codable {
     let safeArea: [String: Double]
     let orientation: String
     let diagnostics: [String]
+    let pageMetrics: [String: Double]
     var instruction: String
     var screenshot: String
 }
@@ -145,7 +178,8 @@ struct PreviewView: View {
                 generation: session.workspace.createdAt, url: web.url?.absoluteString ?? session.url.absoluteString, device: UIDevice.current.model,
                 systemVersion: UIDevice.current.systemVersion, viewportWidth: web.bounds.width, viewportHeight: web.bounds.height,
                 scale: web.traitCollection.displayScale, safeArea: ["top": inset.top, "bottom": inset.bottom, "left": inset.left, "right": inset.right],
-                orientation: web.window?.windowScene?.interfaceOrientation.isLandscape == true ? "landscape" : "portrait", diagnostics: controller.messages, instruction: "", screenshot: "")
+                orientation: web.window?.windowScene?.interfaceOrientation.isLandscape == true ? "landscape" : "portrait", diagnostics: controller.messages,
+                pageMetrics: await controller.pageMetrics(), instruction: "", screenshot: "")
             snapshot = Snapshot(image: image, report: report)
         } catch { store.error = "The screenshot couldn't be captured. Please try again." }
     }
@@ -198,7 +232,7 @@ struct FeedbackView: View {
                 let height = width / ratio
                 ZStack {
                     Image(uiImage: snapshot.image).resizable().accessibilityLabel("Captured preview screenshot")
-                    DrawingCanvas(drawing: $drawing).accessibilityLabel("Draw on the screenshot with your finger or Apple Pencil")
+                    DrawingCanvas(drawing: $drawing).accessibilityLabel("Draw on the screenshot with your finger or Apple Pencil").allowsHitTesting(!sending && !sent)
                 }.frame(width: width, height: height).clipped()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear { canvasSize = CGSize(width: width, height: height) }
@@ -213,10 +247,10 @@ struct FeedbackView: View {
             HStack {
                 Text("Draw to mark the issue.").font(.caption).foregroundStyle(Theme.muted)
                 Spacer()
-                Button("Clear marks") { drawing = PKDrawing() }.font(.caption).frame(minHeight: 44)
+                Button("Clear marks") { drawing = PKDrawing() }.font(.caption).frame(minHeight: 44).disabled(sending || sent)
             }
             TextField("What should the agent change?", text: $instruction, axis: .vertical).lineLimit(2...4)
-                .padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)).focused($editing).accessibilityLabel("Instruction for the agent")
+                .padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)).focused($editing).accessibilityLabel("Instruction for the agent").disabled(sending || sent)
             if let failure { Text(failure).font(.caption).foregroundStyle(.orange) }
             if sent {
                 Label("Feedback saved to /workspace/inbox.", systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(Theme.green)

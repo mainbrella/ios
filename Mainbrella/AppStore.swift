@@ -68,18 +68,32 @@ import SwiftUI
             let spaces = try await client.workspaces()
             var nextJobs: [String: [Execution]] = [:]
             var nextGrants: [String: [PreviewGrant]] = [:]
+            var failures = 0
             for space in spaces {
-                async let executions = client.executions(space)
-                async let previews = client.previews(space)
-                nextJobs[space.id] = try await executions
-                nextGrants[space.id] = try await previews
+                let sameGeneration = workspaces.contains { $0.id == space.id && $0.createdAt == space.createdAt }
+                async let executions = Self.result { try await client.executions(space) }
+                async let previews = Self.result { try await client.previews(space) }
+                switch await executions {
+                case .success(let values): nextJobs[space.id] = values
+                case .failure: failures += 1; nextJobs[space.id] = sameGeneration ? jobs[space.id] : nil
+                }
+                switch await previews {
+                case .success(let values): nextGrants[space.id] = values
+                case .failure: failures += 1; nextGrants[space.id] = sameGeneration ? grants[space.id] : nil
+                }
             }
             guard revision == self.revision else { return }
-            workspaces = spaces; jobs = nextJobs; grants = nextGrants; syncError = nil; hasLoaded = true
+            workspaces = spaces; jobs = nextJobs; grants = nextGrants
+            syncError = failures == 0 ? nil : "Some activity or preview details couldn't load. Pull to refresh to try again."
+            hasLoaded = true
             if let preview, !spaces.contains(where: { $0.id == preview.workspace.id && $0.createdAt == preview.workspace.createdAt }) {
                 self.preview = nil
             }
         } catch { if revision == self.revision { self.syncError = error.localizedDescription } }
+    }
+    private nonisolated static func result<T>(_ operation: () async throws -> T) async -> Result<T, Error> {
+        do { return .success(try await operation()) }
+        catch { return .failure(error) }
     }
     func openPreview(_ workspace: Workspace, port: Int = 3000) async {
         guard connected, !previewBusy, workspace.status == "running" else { return }
@@ -90,7 +104,7 @@ import SwiftUI
             let grant = try await api.createPreview(workspace, port: port)
             guard revision == self.revision else { return }
             guard let url = grant.url, url.scheme == "https" else { throw APIError.invalidURL }
-            preview = PreviewSession(workspace: workspace, url: url, expiresAt: Date(timeIntervalSince1970: grant.expiresAt / 1000))
+            preview = PreviewSession(grantID: grant.id, workspace: workspace, url: url, expiresAt: Date(timeIntervalSince1970: grant.expiresAt / 1000))
             grants[workspace.id, default: []].append(grant)
         } catch { if revision == self.revision { self.error = error.localizedDescription } }
     }
@@ -100,7 +114,7 @@ import SwiftUI
             try await api.revokePreview(workspace, id: grant.id)
             guard revision == self.revision else { return }
             grants[workspace.id]?.removeAll { $0.id == grant.id }
-            if preview?.workspace.id == workspace.id { preview = nil }
+            if preview?.workspace.id == workspace.id && preview?.grantID == grant.id { preview = nil }
         } catch { if revision == self.revision { self.error = error.localizedDescription } }
     }
 }

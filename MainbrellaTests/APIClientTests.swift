@@ -62,6 +62,39 @@ final class APIClientTests: XCTestCase {
         }
         try await client.upload(Data([1, 2, 3]), path: "/workspace/inbox/a & b.jpg", workspace: Self.workspace)
     }
+    func testExecutionDetailDecodesFlatProductionContract() async throws {
+        StubProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/containers/executions/job")
+            return (200, Data("{\"id\":\"job\",\"status\":\"failed\",\"exitCode\":1,\"stdout\":\"tests ran\",\"stderr\":\"assertion failed\"}".utf8))
+        }
+        let detail = try await client.execution("job", workspace: Self.workspace)
+        XCTAssertTrue(detail.execution.needsReview)
+        XCTAssertEqual(detail.stdout, "tests ran")
+        XCTAssertEqual(detail.stderr, "assertion failed")
+    }
+    func testInboxCommitsMetadataAfterAttachment() async throws {
+        var paths: [String] = []
+        StubProtocol.handler = { request in
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems ?? []
+            paths.append(query.first { $0.name == "path" }?.value ?? request.url!.path)
+            return (200, Data("{}".utf8))
+        }
+        let message = InboxMessage(version: 1, createdAt: "now", workspaceID: Self.workspace.id,
+            generation: Self.workspace.createdAt, source: "ios-photo", instruction: "Fix this", text: "", attachment: "message-id.jpg")
+        try await client.sendInbox(message, attachment: Data([1]), id: "id", workspace: Self.workspace)
+        XCTAssertEqual(paths, ["/containers/files/mkdir", "/workspace/inbox/message-id.jpg", "/workspace/inbox/message-id.json"])
+    }
+    func testAttachmentFailureDoesNotCommitMessage() async {
+        var calls = 0
+        StubProtocol.handler = { _ in
+            calls += 1
+            return (calls == 1 ? 200 : 503, Data("{}".utf8))
+        }
+        let message = InboxMessage(version: 1, createdAt: "now", workspaceID: Self.workspace.id,
+            generation: Self.workspace.createdAt, source: "ios-photo", instruction: "Fix this", text: "", attachment: "message-id.jpg")
+        do { try await client.sendInbox(message, attachment: Data([1]), id: "id", workspace: Self.workspace); XCTFail("Expected upload failure") }
+        catch { XCTAssertEqual(calls, 2) }
+    }
 }
 
 @MainActor final class AppStoreTests: XCTestCase {
@@ -144,5 +177,62 @@ final class APIClientTests: XCTestCase {
         XCTAssertTrue(store.connected)
         XCTAssertFalse(store.hasLoaded)
         XCTAssertNotNil(store.syncError)
+    }
+
+    func testPartialRefreshKeepsWorkspaceAndSuccessfulDetails() async throws {
+        let workspace = APIClientTests.workspace
+        let workspaceJSON = try JSONEncoder().encode(["containers": [workspace]])
+        StubProtocol.handler = { request in
+            switch request.url!.path {
+            case "/containers": return (200, workspaceJSON)
+            case "/containers/executions": return (503, Data("{}".utf8))
+            case "/containers/previews": return (200, Data("{\"previews\":[]}".utf8))
+            default: XCTFail("Unexpected endpoint"); return (404, Data())
+            }
+        }
+        let store = AppStore(token: "mb_test", session: session, saveToken: { _ in })
+        await store.refresh()
+        XCTAssertEqual(store.workspaces, [workspace])
+        XCTAssertTrue(store.hasLoaded)
+        XCTAssertNotNil(store.syncError)
+        XCTAssertEqual(store.grants[workspace.id]?.count, 0)
+    }
+
+    func testRefreshDoesNotCarryExecutionHistoryIntoReplacedGeneration() async throws {
+        var workspace = APIClientTests.workspace
+        var detailsAvailable = true
+        StubProtocol.handler = { request in
+            switch request.url!.path {
+            case "/containers": return (200, try JSONEncoder().encode(["containers": [workspace]]))
+            case "/containers/executions": return detailsAvailable
+                ? (200, Data("{\"executions\":[{\"id\":\"old-job\",\"status\":\"failed\",\"exitCode\":1}]}".utf8))
+                : (503, Data("{}".utf8))
+            case "/containers/previews": return (200, Data("{\"previews\":[]}".utf8))
+            default: XCTFail("Unexpected endpoint"); return (404, Data())
+            }
+        }
+        let store = AppStore(token: "mb_test", session: session, saveToken: { _ in })
+        await store.refresh()
+        XCTAssertEqual(store.jobs[workspace.id]?.first?.id, "old-job")
+        workspace = Workspace(id: workspace.id, name: workspace.name, status: "running", createdAt: "2026-10-05T14:00:00.000Z", expiresAt: "2026-10-05T15:00:00.000Z")
+        detailsAvailable = false
+        await store.refresh()
+        XCTAssertNil(store.jobs[workspace.id])
+        XCTAssertEqual(store.workspaces, [workspace])
+        XCTAssertNotNil(store.syncError)
+    }
+
+    func testRevokingAnotherGrantKeepsOpenPreview() async throws {
+        let workspace = APIClientTests.workspace
+        let store = AppStore(token: "mb_test", session: session, saveToken: { _ in })
+        store.preview = PreviewSession(grantID: "open", workspace: workspace, url: URL(string: "https://protected.mainbrella.dev")!, expiresAt: Date().addingTimeInterval(300))
+        StubProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            return (200, Data("{}".utf8))
+        }
+        await store.revoke(workspace, grant: PreviewGrant(id: "other", port: 3001, createdAt: workspace.createdAt, expiresAt: 0, url: nil))
+        XCTAssertEqual(store.preview?.grantID, "open")
+        await store.revoke(workspace, grant: PreviewGrant(id: "open", port: 3000, createdAt: workspace.createdAt, expiresAt: 0, url: nil))
+        XCTAssertNil(store.preview)
     }
 }

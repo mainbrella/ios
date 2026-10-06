@@ -17,6 +17,9 @@ enum APIError: LocalizedError {
             if status == 401 { return "Your API key is invalid or expired. Update it in Account." }
             if status == 402 { return "An active plan is required. Manage your plan at mainbrella.com." }
             if code == "preview_reconciliation_required" { return "Preview cleanup is required. Inspect and revoke the outstanding grant before creating another." }
+            if code == "execution_not_found" { return "This execution is no longer available. Execution history expires after one hour." }
+            if code == "container_not_running" { return "This workspace has stopped or been replaced. Refresh your projects to continue." }
+            if status == 413 { return "This attachment is too large. Choose a smaller image or shorten the message." }
             return "The request could not be completed (\(status)). Please refresh and try again."
         }
     }
@@ -28,7 +31,7 @@ struct APIClient {
     var session: URLSession = .shared
 
     func request(_ path: String, method: String = "GET", workspace: Workspace? = nil,
-                 query: [URLQueryItem] = [], body: Data? = nil, contentType: String = "application/json") async throws -> Data {
+                 query: [URLQueryItem] = [], body: Data? = nil, contentType: String = "application/json", idempotencyKey: String? = nil) async throws -> Data {
         var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         components.queryItems = (workspace.map { [URLQueryItem(name: "id", value: $0.id), URLQueryItem(name: "createdAt", value: $0.createdAt)] } ?? []) + query
         var request = URLRequest(url: components.url!)
@@ -36,6 +39,7 @@ struct APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        if let idempotencyKey { request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key") }
         request.httpBody = body
         request.timeoutInterval = 35
         let (data, response) = try await session.data(for: request)
@@ -54,6 +58,21 @@ struct APIClient {
     func executions(_ workspace: Workspace) async throws -> [Execution] {
         struct Response: Decodable { let executions: [Execution] }
         return try JSONDecoder().decode(Response.self, from: await request("containers/executions", workspace: workspace)).executions
+    }
+    func execution(_ id: String, workspace: Workspace) async throws -> ExecutionDetail {
+        try JSONDecoder().decode(ExecutionDetail.self, from: await request("containers/executions/\(id)", workspace: workspace))
+    }
+    func sendInbox(_ message: InboxMessage, attachment: Data?, id: String, workspace: Workspace) async throws {
+        let metadata = try JSONEncoder().encode(message)
+        guard metadata.count <= 1_048_576, (attachment?.count ?? 0) <= 1_048_576 else {
+            throw APIError.response(413, "file_too_large")
+        }
+        try await makeInbox(workspace)
+        if let attachment, let filename = message.attachment {
+            try await upload(attachment, path: "/workspace/inbox/\(filename)", workspace: workspace)
+        }
+        // The JSON file commits the handoff after its attachment is available.
+        try await upload(metadata, path: "/workspace/inbox/message-\(id).json", workspace: workspace)
     }
     func previews(_ workspace: Workspace) async throws -> [PreviewGrant] {
         struct Response: Decodable { let previews: [PreviewGrant] }

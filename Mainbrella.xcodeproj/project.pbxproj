@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		290672D078598461F7DDC186 /* MainbrellaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E80997B0267F5698CBBB61 /* MainbrellaUITests.swift */; };
 		37A41E8DE3746A0FEAE9A50D /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D34824E776A962799FCBD4 /* Models.swift */; };
+		4C2267C3DBF07C106DC5CB99 /* WorkspaceTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD165057FECFFCACB7CFD1B9 /* WorkspaceTools.swift */; };
 		59EE6403941A06D1E3C00F8A /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD4912731F4CFB911B2D560A /* APIClientTests.swift */; };
 		6A99E2DA002A7DC94678F2EA /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E828FB9B66A0E9D6D24D6B4 /* AppStore.swift */; };
 		73E6101F700857C632EFB7DD /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C439273406A423783E58FB /* Views.swift */; };
@@ -46,6 +47,7 @@
 		B4E80997B0267F5698CBBB61 /* MainbrellaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainbrellaUITests.swift; sourceTree = "<group>"; };
 		BD4912731F4CFB911B2D560A /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
 		FCA9FAAB713EBF3FA1D8FA2B /* MainbrellaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MainbrellaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FD165057FECFFCACB7CFD1B9 /* WorkspaceTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTools.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -86,6 +88,7 @@
 				40D34824E776A962799FCBD4 /* Models.swift */,
 				7EB4ACC46E82DEB6ADDBAC39 /* PreviewView.swift */,
 				70C439273406A423783E58FB /* Views.swift */,
+				FD165057FECFFCACB7CFD1B9 /* WorkspaceTools.swift */,
 			);
 			path = Mainbrella;
 			sourceTree = "<group>";
@@ -234,6 +237,7 @@
 				37A41E8DE3746A0FEAE9A50D /* Models.swift in Sources */,
 				DDAB3295CEB33F13A8A93555 /* PreviewView.swift in Sources */,
 				73E6101F700857C632EFB7DD /* Views.swift in Sources */,
+				4C2267C3DBF07C106DC5CB99 /* WorkspaceTools.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
