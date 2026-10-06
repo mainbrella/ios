@@ -1,12 +1,18 @@
 import Foundation
 import Security
 
+enum ServiceURLs {
+    static let website = URL(string: "https://mainbrella.com/")!
+    static let api = URL(string: "https://api.mainbrella.com/")!
+    static let apiKeys = website.appendingPathComponent("api-keys/")
+}
+
 enum APIError: LocalizedError {
     case response(Int, String)
     case invalidURL
     var errorDescription: String? {
         switch self {
-        case .invalidURL: return "Enter a valid HTTPS API address."
+        case .invalidURL: return "The server returned an invalid preview link. Refresh previews and try again."
         case .response(let status, let code):
             if status == 401 { return "Your API key is invalid or expired. Update it in Account." }
             if status == 402 { return "An active plan is required. Manage your plan at mainbrella.com." }
@@ -27,6 +33,7 @@ struct APIClient {
         components.queryItems = (workspace.map { [URLQueryItem(name: "id", value: $0.id), URLQueryItem(name: "createdAt", value: $0.createdAt)] } ?? []) + query
         var request = URLRequest(url: components.url!)
         request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = body

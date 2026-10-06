@@ -7,6 +7,7 @@ settings:
   base:
     SWIFT_VERSION: '5.0'
     DEVELOPMENT_TEAM: ''
+    GENERATE_INFOPLIST_FILE: YES
 targets:
   Mainbrella:
     type: application
@@ -20,7 +21,6 @@ targets:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        INFOPLIST_KEY_NSFaceIDUsageDescription: Authenticate sensitive agent approvals.
   MainbrellaTests:
     type: bundle.unit-test
     platform: iOS

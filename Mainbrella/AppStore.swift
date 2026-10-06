@@ -1,68 +1,65 @@
 import SwiftUI
-import LocalAuthentication
 
 @MainActor final class AppStore: ObservableObject {
-    @Published var demo = true
-    @Published var workspaces: [Workspace] = [.demo]
-    @Published var jobs: [String: [Execution]] = [:]
-    @Published var grants: [String: [PreviewGrant]] = [:]
-    @Published var approvals = Approval.examples
-    @Published var loading = false
+    @Published private(set) var workspaces: [Workspace] = []
+    @Published private(set) var jobs: [String: [Execution]] = [:]
+    @Published private(set) var grants: [String: [PreviewGrant]] = [:]
+    @Published private(set) var loading = false
+    @Published private(set) var hasLoaded = false
     @Published var error: String?
     @Published var syncError: String?
-    @Published var notice: String?
     @Published var preview: PreviewSession?
-    @Published var previewBusy = false
-    @Published var endpoint = UserDefaults.standard.string(forKey: "endpoint") ?? "https://api.mainbrella.com"
-    private var token = Keychain.read()
+    @Published private(set) var previewBusy = false
+    @Published private var token: String
+    private let session: URLSession
+    private let saveToken: (String) throws -> Void
     private var revision = 0
-    init() {
-        if !token.isEmpty { demo = false; workspaces = []; approvals = [] }
+
+    init(token: String = Keychain.read(), session: URLSession = .shared,
+         saveToken: @escaping (String) throws -> Void = Keychain.save) {
+        self.token = token
+        self.session = session
+        self.saveToken = saveToken
     }
     var connected: Bool { !token.isEmpty }
     var api: APIClient {
         get throws {
-            guard let url = URL(string: endpoint), url.scheme == "https", url.host != nil,
-                  url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else { throw APIError.invalidURL }
-            return APIClient(baseURL: url, token: token)
+            guard connected else { throw APIError.response(401, "") }
+            return APIClient(baseURL: ServiceURLs.api, token: token, session: session)
         }
     }
-    func connect(endpoint: String, token: String) async -> Bool {
+    func connect(token: String) async -> Bool {
         guard !loading else { return false }
-        let oldEndpoint = self.endpoint
-        self.endpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        loading = true
+        defer { loading = false }
         do {
-            _ = try api
             let key = token.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !key.isEmpty else { throw APIError.response(401, "") }
-            let client = APIClient(baseURL: try api.baseURL, token: key)
-            loading = true
-            defer { loading = false }
+            let client = APIClient(baseURL: ServiceURLs.api, token: key, session: session)
             let spaces = try await client.workspaces()
-            try Keychain.save(key)
+            try saveToken(key)
+            revision += 1
             self.token = key
-            UserDefaults.standard.set(self.endpoint, forKey: "endpoint")
-            demo = false
             preview = nil
             workspaces = spaces
-            approvals = []
-            jobs = [:]; grants = [:]; error = nil
+            jobs = [:]; grants = [:]; error = nil; syncError = nil; hasLoaded = false
             loading = false
             await refresh()
             return true
-        } catch { self.endpoint = oldEndpoint; self.error = error.localizedDescription; return false }
-    }
-    func useDemo() {
-        revision += 1
-        demo = true; workspaces = [.demo]; jobs = [:]; grants = [:]
-        approvals = Approval.examples; error = nil; syncError = nil; notice = nil; preview = nil
+        } catch { self.error = error.localizedDescription; return false }
     }
     func disconnect() {
-        do { try Keychain.save(""); token = ""; useDemo() }
-        catch { self.error = error.localizedDescription }
+        guard !loading, !previewBusy else { return }
+        do {
+            try saveToken("")
+            revision += 1
+            token = ""
+            workspaces = []; jobs = [:]; grants = [:]; preview = nil
+            error = nil; syncError = nil; hasLoaded = false
+        } catch { self.error = error.localizedDescription }
     }
     func refresh() async {
-        guard !demo, !loading else { return }
+        guard connected, !loading else { return }
         loading = true
         let revision = self.revision
         defer { loading = false }
@@ -78,37 +75,33 @@ import LocalAuthentication
                 nextGrants[space.id] = try await previews
             }
             guard revision == self.revision else { return }
-            workspaces = spaces; jobs = nextJobs; grants = nextGrants; syncError = nil
+            workspaces = spaces; jobs = nextJobs; grants = nextGrants; syncError = nil; hasLoaded = true
+            if let preview, !spaces.contains(where: { $0.id == preview.workspace.id && $0.createdAt == preview.workspace.createdAt }) {
+                self.preview = nil
+            }
         } catch { if revision == self.revision { self.syncError = error.localizedDescription } }
     }
-    func decide(_ approval: Approval, approve: Bool) async {
-        guard demo else { return }
-        if approve && approval.sensitive {
-            let context = LAContext()
-            do { guard try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Approve use of the test secret in this demo") else { return } }
-            catch { self.error = "Approval was not authenticated."; return }
-        }
-        withAnimation { approvals.removeAll { $0.id == approval.id } }
-        notice = approve ? "Demo approval accepted." : "Demo request denied."
-    }
     func openPreview(_ workspace: Workspace, port: Int = 3000) async {
-        guard !previewBusy else { return }
-        if demo { preview = PreviewSession(workspace: workspace, url: nil, expiresAt: nil); return }
+        guard connected, !previewBusy, workspace.status == "running" else { return }
         previewBusy = true
+        let revision = self.revision
         defer { previewBusy = false }
         do {
             let grant = try await api.createPreview(workspace, port: port)
+            guard revision == self.revision else { return }
             guard let url = grant.url, url.scheme == "https" else { throw APIError.invalidURL }
             preview = PreviewSession(workspace: workspace, url: url, expiresAt: Date(timeIntervalSince1970: grant.expiresAt / 1000))
             grants[workspace.id, default: []].append(grant)
-        } catch { self.error = error.localizedDescription }
+        } catch { if revision == self.revision { self.error = error.localizedDescription } }
     }
     func revoke(_ workspace: Workspace, grant: PreviewGrant) async {
+        let revision = self.revision
         do {
             try await api.revokePreview(workspace, id: grant.id)
+            guard revision == self.revision else { return }
             grants[workspace.id]?.removeAll { $0.id == grant.id }
             if preview?.workspace.id == workspace.id { preview = nil }
-        } catch { self.error = error.localizedDescription }
+        } catch { if revision == self.revision { self.error = error.localizedDescription } }
     }
 }
 

@@ -9,7 +9,7 @@ enum Theme {
 }
 
 enum Destination: String, CaseIterable, Identifiable {
-    case inbox = "Needs Me", projects = "Projects", previews = "Previews", account = "Account"
+    case inbox = "Activity", projects = "Projects", previews = "Previews", account = "Account"
     var id: String { rawValue }
     var symbol: String {
         switch self { case .inbox: "tray"; case .projects: "folder"; case .previews: "rectangle.on.rectangle"; case .account: "person.crop.circle" }
@@ -19,13 +19,14 @@ enum Destination: String, CaseIterable, Identifiable {
 struct RootView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.horizontalSizeClass) private var size
-    @Environment(\.scenePhase) private var phase
     @State private var destination: Destination = .inbox
     var body: some View {
         GeometryReader { geometry in
             let inspector = size == .regular && geometry.size.width >= 1100
             Group {
-                if size == .regular {
+                if !store.connected {
+                    NavigationStack { AccountView() }
+                } else if size == .regular {
                     NavigationSplitView {
                         List(Destination.allCases) { item in
                             Button { destination = item } label: {
@@ -36,20 +37,17 @@ struct RootView: View {
                     } detail: {
                         HStack(spacing: 0) {
                             NavigationStack { content }.frame(maxWidth: .infinity)
-                            if inspector && destination != .account {
+                            if inspector && destination != .account, let preview = store.preview {
                                 Divider()
-                                Group {
-                                    if let preview = store.preview { PreviewView(session: preview, embedded: true).id(preview.id) }
-                                    else { ContentUnavailableView("Preview", systemImage: "rectangle.on.rectangle", description: Text("Open a workspace preview to inspect it here.")) }
-                                }.frame(width: 350).background(Theme.surface)
+                                PreviewView(session: preview, embedded: true).id(preview.id)
+                                    .frame(width: 350).background(Theme.surface)
                             }
                         }
                     }
                 } else {
                     TabView(selection: $destination) {
                         ForEach(Destination.allCases) { item in
-                            NavigationStack { screen(item) }.tabItem { Label(item == .inbox ? "Inbox" : item.rawValue, systemImage: item.symbol) }.tag(item)
-                                .badge(item == .inbox ? store.approvals.count + (store.demo ? 1 : 0) : 0)
+                            NavigationStack { screen(item) }.tabItem { Label(item.rawValue, systemImage: item.symbol) }.tag(item)
                         }
                     }
                 }
@@ -61,13 +59,8 @@ struct RootView: View {
             .alert("Unable to complete request", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
                 Button("OK") { store.error = nil }
             } message: { Text(store.error ?? "") }
-            .task(id: phase) {
-                guard phase == .active else { return }
-                while !Task.isCancelled {
-                    await store.refresh()
-                    do { try await Task.sleep(for: .seconds(15)) } catch { break }
-                }
-            }
+            .onChange(of: store.connected) { _, _ in destination = .inbox }
+            .task { await store.refresh() }
         }
     }
     @ViewBuilder private var content: some View { screen(destination) }
@@ -100,97 +93,46 @@ struct InboxView: View {
     @EnvironmentObject var store: AppStore
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top) {
-                    Image(systemName: "umbrella.fill").font(.system(size: 34)).foregroundStyle(Theme.blue).accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Mainbrella").font(.title.weight(.bold))
-                        Text("Your agents need you.").font(.subheadline).foregroundStyle(Theme.muted)
-                    }
-                    Spacer(minLength: 8)
+            VStack(alignment: .leading, spacing: 20) {
+                if let error = store.syncError {
+                    Label(error, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.orange)
                 }
-                if store.demo {
-                    HStack {
-                        Label("Demo workspace", systemImage: "play.circle").font(.caption.weight(.medium))
-                        Spacer()
-                        NavigationLink("Connect account") { AccountView() }.font(.caption.weight(.semibold)).frame(minHeight: 44)
-                    }.foregroundStyle(Theme.muted)
-                }
-                if let error = store.syncError { Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
-                if store.loading && !store.demo { ProgressView("Refreshing workspaces…").font(.caption) }
-                VStack(spacing: 12) {
-                    SectionLabel(title: "Needs Me", symbol: "exclamationmark.circle.fill", color: .orange, count: store.approvals.count + (store.demo ? 1 : 0))
-                    if store.demo {
-                        VStack(spacing: 0) {
-                            ForEach(store.approvals) { approval in
-                                ApprovalRow(approval: approval)
-                                Divider().padding(.leading, 64)
-                            }
-                            HStack(alignment: .top, spacing: 12) {
-                                SymbolTile(symbol: "doc.richtext", color: Theme.blue)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Preview ready for mainbrella/web").font(.subheadline.weight(.semibold))
-                                    Text("Web Agent · 12 min ago").font(.caption).foregroundStyle(Theme.muted)
-                                    Button("Open preview") { Task { await store.openPreview(.demo) } }.buttonStyle(ActionStyle(color: Theme.blue))
-                                }
-                                Spacer(minLength: 0)
-                            }.padding(16)
-                        }.background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+                if store.loading && !store.hasLoaded { ProgressView("Loading activity…") }
+                if store.hasLoaded {
+                    let jobs = store.jobs.values.flatMap { $0 }
+                    if jobs.isEmpty {
+                        Text("No execution activity yet.").foregroundStyle(Theme.muted)
                     } else {
-                        Text("Agent approvals aren't available yet. Your workspaces and previews are connected.").font(.subheadline).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading)
+                        if jobs.contains(where: \.running) {
+                            SectionLabel(title: "Working", symbol: "circle.fill", color: Theme.blue, count: jobs.filter(\.running).count)
+                            executionRows(running: true)
+                        }
+                        if jobs.contains(where: { !$0.running }) {
+                            SectionLabel(title: "Finished", symbol: "checkmark.circle", color: Theme.muted, count: jobs.filter { !$0.running }.count)
+                            executionRows(running: false)
+                        }
                     }
                 }
-                VStack(spacing: 12) {
-                    SectionLabel(title: "Working", symbol: "circle.fill", color: Theme.green, count: store.demo ? 2 : store.jobs.values.flatMap { $0 }.filter(\.running).count)
-                    if store.demo {
-                        VStack(spacing: 0) {
-                            DemoJobRow(title: "Pricing page redesign", subtitle: "Frontend Agent · 17/23 tests passed", symbol: "terminal", progress: 0.74)
-                            Divider().padding(.leading, 64)
-                            DemoJobRow(title: "Groupicorn iOS", subtitle: "iOS Agent · Building preview", symbol: "hammer", progress: 0.62)
-                        }.background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
-                    } else { executionRows(running: true) }
-                }
-                VStack(spacing: 12) {
-                    SectionLabel(title: "Done", symbol: "checkmark.circle.fill", color: Theme.green, count: store.demo ? 2 : store.jobs.values.flatMap { $0 }.filter { !$0.running }.count)
-                    if store.demo {
-                        VStack(spacing: 0) {
-                            completedRow("Fix onboarding copy", subtitle: "mainbrella/web · Completed 2h ago", symbol: "chevron.left.forwardslash.chevron.right")
-                            Divider().padding(.leading, 64)
-                            completedRow("Update analytics schema", subtitle: "Data Agent · Completed 4h ago", symbol: "externaldrive")
-                        }.background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
-                    } else { executionRows(running: false) }
-                }
-                if let notice = store.notice {
-                    HStack { Text(notice).font(.caption); Spacer(); Button("Dismiss") { store.notice = nil }.font(.caption).frame(minHeight: 44) }.foregroundStyle(Theme.muted)
-                }
-            }.padding(20).frame(maxWidth: 680)
-                .frame(maxWidth: .infinity)
-        }.background(Theme.background).navigationBarHidden(true).refreshable { await store.refresh() }
+            }.padding(20).frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity)
+        }.background(Theme.background).navigationTitle("Activity").navigationBarTitleDisplayMode(.inline)
+            .refreshable { await store.refresh() }
     }
     @ViewBuilder private func executionRows(running: Bool) -> some View {
-        let spaces = store.workspaces.filter { space in store.jobs[space.id, default: []].contains { $0.running == running } }
-        if spaces.isEmpty { Text(running ? "No work is running." : "No completed work yet.").font(.subheadline).foregroundStyle(Theme.muted).frame(maxWidth: .infinity, alignment: .leading) }
-        ForEach(spaces) { space in
+        ForEach(store.workspaces) { space in
             ForEach(store.jobs[space.id, default: []].filter { $0.running == running }) { job in
-                HStack {
-                    SymbolTile(symbol: running ? "terminal" : "checkmark", color: running ? Theme.blue : Theme.green)
+                HStack(spacing: 12) {
+                    SymbolTile(symbol: job.running ? "terminal" : job.status == "succeeded" ? "checkmark" : "exclamationmark.circle",
+                               color: job.running ? Theme.blue : job.status == "succeeded" ? Theme.green : .orange)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(space.name).font(.subheadline.weight(.semibold))
-                        Text("Execution \(job.id.prefix(8)) · \(job.status.replacingOccurrences(of: "_", with: " "))").font(.caption).foregroundStyle(Theme.muted)
+                        Text("Execution \(job.id.prefix(8)) · \(job.status.replacingOccurrences(of: "_", with: " "))")
+                            .font(.caption).foregroundStyle(Theme.muted)
                     }
                     Spacer()
                     if running { ProgressView().accessibilityLabel("Execution running") }
-                }.padding(16).background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+                }.padding(.vertical, 8)
             }
         }
-    }
-    private func completedRow(_ title: String, subtitle: String, symbol: String) -> some View {
-        HStack(spacing: 12) {
-            SymbolTile(symbol: symbol, color: Theme.green)
-            VStack(alignment: .leading, spacing: 4) { Text(title).font(.subheadline.weight(.semibold)); Text(subtitle).font(.caption).foregroundStyle(Theme.muted) }
-            Spacer(minLength: 4)
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.green)
-        }.padding(16)
     }
 }
 
@@ -211,53 +153,6 @@ struct ActionStyle: ButtonStyle {
     }
 }
 
-struct ApprovalRow: View {
-    @EnvironmentObject var store: AppStore
-    let approval: Approval
-    @State private var busy = false
-    @State private var confirming = false
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            SymbolTile(symbol: approval.symbol, color: approval.sensitive ? .orange : .purple)
-            VStack(alignment: .leading, spacing: 7) {
-                Text(approval.title).font(.subheadline.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                Text(approval.agent).font(.caption).foregroundStyle(Theme.muted)
-                ViewThatFits(in: .horizontal) {
-                    HStack { approveButton; denyButton }
-                    VStack(alignment: .leading) { approveButton; denyButton }
-                }.disabled(busy)
-            }
-            Spacer(minLength: 0)
-        }.padding(16)
-        .confirmationDialog("Approve this demo request?", isPresented: $confirming, titleVisibility: .visible) {
-            Button("Approve") { Task { busy = true; await store.decide(approval, approve: true); busy = false } }
-        } message: { Text(approval.title) }
-    }
-    private var approveButton: some View {
-        Button(busy ? "Authenticating…" : "Approve") { confirming = true }.buttonStyle(ActionStyle(color: Color(red: 0.03, green: 0.53, blue: 0.42)))
-    }
-    private var denyButton: some View {
-        Button("Deny") { Task { await store.decide(approval, approve: false) } }.buttonStyle(ActionStyle(color: .white.opacity(0.07)))
-    }
-}
-
-struct DemoJobRow: View {
-    let title: String
-    let subtitle: String
-    let symbol: String
-    let progress: Double
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            SymbolTile(symbol: symbol, color: Theme.blue)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack { Text(title).font(.subheadline.weight(.semibold)); Spacer(); Text("Running").font(.caption).foregroundStyle(Theme.blue) }
-                Text(subtitle).font(.caption).foregroundStyle(Theme.muted)
-                HStack { ProgressView(value: progress).tint(Theme.green); Text(progress, format: .percent.precision(.fractionLength(0))).font(.caption).foregroundStyle(Theme.muted) }
-            }
-        }.padding(16)
-    }
-}
-
 struct WorkspacesView: View {
     @EnvironmentObject var store: AppStore
     let previewsOnly: Bool
@@ -267,8 +162,8 @@ struct WorkspacesView: View {
     var body: some View {
         List {
             if let error = store.syncError { Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
-            if store.demo { Text("Demo mode · Connect your account for live workspaces.").font(.caption).foregroundStyle(Theme.muted).listRowBackground(Theme.background) }
-            if store.workspaces.isEmpty {
+            if store.loading && !store.hasLoaded { ProgressView("Loading workspaces…") }
+            if store.hasLoaded && store.workspaces.isEmpty {
                 Text("No active workspaces. Start one from Mainbrella on the web.").foregroundStyle(Theme.muted).listRowBackground(Theme.background)
             }
             ForEach(store.workspaces) { workspace in
@@ -276,7 +171,7 @@ struct WorkspacesView: View {
                     HStack {
                         Label(workspace.name, systemImage: "folder")
                         Spacer()
-                        Text(workspace.status.capitalized).font(.caption).foregroundStyle(Theme.green)
+                        Text(workspace.status.capitalized).font(.caption).foregroundStyle(workspace.status == "running" ? Theme.green : Theme.muted)
                     }
                     if !previewsOnly {
                         LabeledContent("Workspace", value: workspace.id).font(.caption)
@@ -285,7 +180,7 @@ struct WorkspacesView: View {
                     Button { selected = workspace; showPort = true } label: {
                         Label(store.previewBusy ? "Opening preview…" : "Open preview", systemImage: "arrow.up.right.square")
                             .frame(minHeight: 44)
-                    }.disabled(store.previewBusy)
+                    }.disabled(store.previewBusy || workspace.status != "running")
                     ForEach(store.grants[workspace.id, default: []]) { grant in
                         HStack {
                             VStack(alignment: .leading) {
@@ -308,7 +203,7 @@ struct WorkspacesView: View {
                     Task { await store.openPreview(workspace, port: value) }
                 }
                 Button("Cancel", role: .cancel) {}
-            } message: { Text(store.demo ? "Open the local demo preview." : "The app server must already be running. Creates a protected link for up to 15 minutes. Existing grants can be revoked below.") }
+            } message: { Text("The app server must already be running. Creates a protected link for up to 15 minutes. Existing grants can be revoked below.") }
     }
     private func formatted(_ value: String) -> String {
         let formatter = ISO8601DateFormatter()
@@ -319,26 +214,30 @@ struct WorkspacesView: View {
 
 struct AccountView: View {
     @EnvironmentObject var store: AppStore
-    @State private var endpoint = ""
     @State private var token = ""
     var body: some View {
         Form {
             Section {
-                LabeledContent("Mode", value: store.demo ? "Demo" : "Live")
-                TextField("API address", text: $endpoint).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                SecureField("API key", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button(store.loading ? "Connecting…" : "Connect") { Task { if await store.connect(endpoint: endpoint, token: token) { token = "" } } }.disabled(store.loading || token.isEmpty)
-                Link("Create an API key", destination: URL(string: "https://mainbrella.com/api-keys/")!)
-            } header: { Text("Connection") } footer: { Text("Your key is stored in this device's Keychain. An active Mainbrella plan is required for previews and uploads.") }
-            Section {
-                Button("Try demo") { store.useDemo() }.disabled(store.loading)
-                if store.connected { Button("Remove saved key", role: .destructive) { store.disconnect() }.disabled(store.loading) }
+                LabeledContent("Status", value: store.connected ? "Connected" : "Not connected")
+                LabeledContent("API", value: ServiceURLs.api.host ?? "")
+                HStack {
+                    Text("API key")
+                    SecureField("Paste your API key", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .accessibilityLabel("API key")
+                }
+                Button(store.loading ? "Connecting…" : store.connected ? "Update API key" : "Connect") {
+                    Task { if await store.connect(token: token) { token = "" } }
+                }.disabled(store.loading || store.previewBusy || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Link("Create an API key", destination: ServiceURLs.apiKeys)
+            } header: { Text("Connection") } footer: {
+                Text("Your key is stored in this device's Keychain. An active Mainbrella plan is required for previews and uploads.")
             }
-            Section("This first version") {
-                Text("Live workspaces, execution status, protected previews, and screenshot feedback uploads.")
-                Text("Approvals are demonstrated locally. Push notifications and automatic agent handoff need backend support.").foregroundStyle(Theme.muted)
+            if store.connected {
+                Section {
+                    Button("Remove saved key", role: .destructive) { store.disconnect() }.disabled(store.loading || store.previewBusy)
+                }
             }
-        }.scrollContentBackground(.hidden).background(Theme.background).navigationTitle("Account").navigationBarTitleDisplayMode(.inline)
-            .onAppear { endpoint = store.endpoint }
+        }.scrollContentBackground(.hidden).frame(maxWidth: 680).frame(maxWidth: .infinity).background(Theme.background)
+            .navigationTitle(store.connected ? "Account" : "Connect to Mainbrella").navigationBarTitleDisplayMode(.inline)
     }
 }

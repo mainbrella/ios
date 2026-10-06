@@ -32,8 +32,7 @@ import PencilKit
         webView.stopLoading()
     }
     func load(_ session: PreviewSession) {
-        if let url = session.url { webView.load(URLRequest(url: url)) }
-        else { webView.loadHTMLString(Self.demoHTML, baseURL: nil) }
+        webView.load(URLRequest(url: session.url))
     }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let value = message.body as? String else { return }
@@ -57,11 +56,6 @@ import PencilKit
         config.rect = webView.bounds
         return try await webView.takeSnapshot(configuration: config)
     }
-    static let demoHTML = """
-    <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>
-    *{box-sizing:border-box}body{margin:0;background:#0c1020;color:#fafaff;font:16px -apple-system,BlinkMacSystemFont,sans-serif}header{padding:24px;display:flex;align-items:center;justify-content:space-between}strong{font-size:17px}a{color:#b7c5ff;font-size:13px}main{padding:100px 28px 48px;min-height:82vh;background:radial-gradient(ellipse at 80% 90%,#403b77,transparent 65%)}h1{font-size:42px;line-height:1.12;letter-spacing:-1px;max-width:340px}p{color:#c0c3d6;line-height:1.6}button{background:#4168fa;color:white;padding:14px 20px;border:0;border-radius:10px;font:inherit}.landscape{margin-top:64px;height:140px;clip-path:polygon(0 80%,14% 30%,27% 58%,40% 12%,58% 66%,77% 20%,100% 77%,100% 100%,0 100%);background:#171b38}
-    </style></head><body><header><strong>☂ Mainbrella</strong><a href="https://mainbrella.com">Visit website ↗</a></header><main><h1>Your AI agents.<br>Under control.</h1><p>Plan. Delegate. Approve. Ship.</p><button onclick="document.getElementById('status').textContent='Ready for your next idea.'">Get started →</button><p id="status"></p><div class="landscape"></div></main></body></html>
-    """
 }
 
 private final class WeakMessageHandler: NSObject, WKScriptMessageHandler {
@@ -118,7 +112,7 @@ struct PreviewView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(session.workspace.name).font(.subheadline.weight(.semibold))
-                    Text(session.url == nil ? "Local demo · iPhone feedback" : "Protected preview · expires \(session.expiresAt?.formatted(date: .omitted, time: .shortened) ?? "soon")").font(.caption).foregroundStyle(Theme.muted)
+                    Text("Protected preview · expires \(session.expiresAt.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(Theme.muted)
                 }
                 Spacer()
                 Button { controller.load(session) } label: { Image(systemName: "arrow.clockwise").frame(width: 44, height: 44) }.accessibilityLabel("Reload preview")
@@ -137,7 +131,7 @@ struct PreviewView: View {
             .toolbar { if !embedded { ToolbarItem(placement: .topBarLeading) { Button("Done") { store.preview = nil; dismiss() } } } }
             .onAppear { controller.load(session) }.onDisappear { controller.stop() }
             .sheet(item: $snapshot) { snapshot in
-                NavigationStack { FeedbackView(snapshot: snapshot, workspace: session.workspace, demo: session.url == nil) }.environmentObject(store)
+                NavigationStack { FeedbackView(snapshot: snapshot, workspace: session.workspace) }.environmentObject(store)
             }
     }
     private func capture() async {
@@ -148,7 +142,7 @@ struct PreviewView: View {
             let web = controller.webView
             let inset = web.safeAreaInsets
             let report = FeedbackReport(version: 1, capturedAt: ISO8601DateFormatter().string(from: Date()), workspaceID: session.workspace.id,
-                generation: session.workspace.createdAt, url: web.url?.absoluteString ?? "local-demo", device: UIDevice.current.model,
+                generation: session.workspace.createdAt, url: web.url?.absoluteString ?? session.url.absoluteString, device: UIDevice.current.model,
                 systemVersion: UIDevice.current.systemVersion, viewportWidth: web.bounds.width, viewportHeight: web.bounds.height,
                 scale: web.traitCollection.displayScale, safeArea: ["top": inset.top, "bottom": inset.bottom, "left": inset.left, "right": inset.right],
                 orientation: web.window?.windowScene?.interfaceOrientation.isLandscape == true ? "landscape" : "portrait", diagnostics: controller.messages, instruction: "", screenshot: "")
@@ -188,7 +182,6 @@ struct FeedbackView: View {
     @Environment(\.dismiss) private var dismiss
     let snapshot: Snapshot
     let workspace: Workspace
-    let demo: Bool
     @State private var drawing = PKDrawing()
     @State private var instruction = ""
     @State private var canvasSize = CGSize.zero
@@ -226,12 +219,12 @@ struct FeedbackView: View {
                 .padding(12).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10)).focused($editing).accessibilityLabel("Instruction for the agent")
             if let failure { Text(failure).font(.caption).foregroundStyle(.orange) }
             if sent {
-                Label(demo ? "Demo feedback captured. No files uploaded." : "Feedback saved to /workspace/inbox.", systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(Theme.green)
+                Label("Feedback saved to /workspace/inbox.", systemImage: "checkmark.circle.fill").font(.subheadline).foregroundStyle(Theme.green)
                 Button("Done") { dismiss() }.buttonStyle(ActionStyle())
             } else {
-                Text(demo ? "Demo mode: try the feedback flow locally." : "Uploads the marked screenshot and device report. An agent must watch the inbox to pick it up.").font(.caption).foregroundStyle(Theme.muted)
+                Text("Uploads the marked screenshot and device report. An agent must watch the inbox to pick it up.").font(.caption).foregroundStyle(Theme.muted)
                 Button { editing = false; Task { await send() } } label: {
-                    Label(sending ? "Uploading…" : demo ? "Try sending feedback" : "Upload feedback", systemImage: "paperplane").frame(maxWidth: .infinity)
+                    Label(sending ? "Uploading…" : "Upload feedback", systemImage: "paperplane").frame(maxWidth: .infinity)
                 }.buttonStyle(ActionStyle()).disabled(sending || instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }.padding(16).background(Theme.background).navigationTitle("Fix this").navigationBarTitleDisplayMode(.inline)
@@ -254,13 +247,11 @@ struct FeedbackView: View {
             report.instruction = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
             report.screenshot = "feedback-\(reportID).jpg"
             let metadata = try JSONEncoder().encode(report)
-            if !demo {
-                let client = try store.api
-                try await client.makeInbox(workspace)
-                try await client.upload(bytes, path: "/workspace/inbox/\(report.screenshot)", workspace: workspace)
-                // JSON is the completion marker: consumers must only watch feedback-*.json.
-                try await client.upload(metadata, path: "/workspace/inbox/feedback-\(reportID).json", workspace: workspace)
-            }
+            let client = try store.api
+            try await client.makeInbox(workspace)
+            try await client.upload(bytes, path: "/workspace/inbox/\(report.screenshot)", workspace: workspace)
+            // JSON is the completion marker: consumers must only watch feedback-*.json.
+            try await client.upload(metadata, path: "/workspace/inbox/feedback-\(reportID).json", workspace: workspace)
             sent = true
         } catch { failure = "Feedback wasn't fully uploaded. Your screenshot and instruction are still here; try again." }
     }
