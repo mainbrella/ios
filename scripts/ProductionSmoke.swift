@@ -23,6 +23,7 @@ import CoreGraphics
     }
     static func run() async throws {
         let uiDestination = CommandLine.arguments.contains("--ui") ? try simulatorDestination() : nil
+        try require(!CommandLine.arguments.contains("--handoff-only") || uiDestination != nil, "--handoff-only requires --ui")
         let envFile = CommandLine.arguments.dropFirst().first(where: { !$0.hasPrefix("--") }) ?? "../backend/.env"
         let lines = try String(contentsOfFile: envFile, encoding: .utf8).components(separatedBy: .newlines)
         guard let entry = lines.first(where: { $0.hasPrefix("MAINBRELLA_API_KEY=") }) else {
@@ -58,8 +59,12 @@ import CoreGraphics
         _ = try await client.request("containers", method: "DELETE", workspace: workspace)
         try FileManager.default.removeItem(at: checkpoint)
         _ = try await nextActivity(activity) { $0.resource == .containers && $0.containerId == workspace.id && $0.createdAt == workspace.createdAt }
+        if CommandLine.arguments.contains("--handoff-only") {
+            print("PASS: focused production handoff checks. Temporary workspace stopped.")
+            return
+        }
         let uiChecks = uiDestination == nil ? "" : ", native share readback and screenshot feedback"
-        print("PASS: production WebSocket lifecycle/execution/preview events, reconnection snapshot, inbox round trip, execution output, protected preview and revocation\(uiChecks). Temporary workspace stopped.")
+        print("PASS: production WebSocket lifecycle/execution/preview events, reconnection snapshot, photo/file inbox round trips and unchanged retry, execution output, protected preview and revocation\(uiChecks). Temporary workspace stopped.")
     }
     static func openActivity(_ client: APIClient) async throws -> URLSessionWebSocketTask {
         let capabilities = try await client.capabilities()
@@ -114,6 +119,56 @@ import CoreGraphics
             query: [.init(name: "path", value: "/workspace/inbox/message-\(id).json")])
         let saved = try JSONDecoder().decode(InboxMessage.self, from: readJSON)
         try require(saved.generation == workspace.createdAt && saved.text == message.text, "Message identity differs")
+        let documentID = UUID().uuidString.lowercased()
+        let documentBytes = Data("Device QA notes: safe-area padding needs review.\n".utf8)
+        let documentMessage = InboxMessage(version: 1, createdAt: message.createdAt,
+            workspaceID: workspace.id, generation: workspace.createdAt, source: "ios-file",
+            instruction: "Review the attached QA notes", text: "Actual-device context",
+            attachment: "message-\(documentID).txt", attachmentName: "QA notes.txt")
+        try await client.sendInbox(documentMessage, attachment: documentBytes, id: documentID, workspace: workspace)
+        let documentPath = "/workspace/inbox/message-\(documentID).json"
+        let documentJSON = try await client.request("containers/files", workspace: workspace,
+            query: [.init(name: "path", value: documentPath)])
+        let document = try JSONDecoder().decode(InboxMessage.self, from: documentJSON)
+        try require(document.attachmentName == "QA notes.txt" && document.source == "ios-file" && document.generation == workspace.createdAt,
+                    "File handoff metadata differs")
+        let documentRead = try await client.request("containers/files", workspace: workspace,
+            query: [.init(name: "path", value: "/workspace/inbox/\(document.attachment!)")])
+        try require(documentRead == documentBytes, "File attachment bytes differ")
+        try await client.sendInbox(documentMessage, attachment: documentBytes, id: documentID, workspace: workspace)
+        let retryJSON = try await client.request("containers/files", workspace: workspace,
+            query: [.init(name: "path", value: documentPath)])
+        try require(documentJSON == retryJSON, "Retry changed completion metadata")
+        print("PASS: production photo/file handoff, original filename, exact generation, and unchanged retry bytes.")
+        if CommandLine.arguments.contains("--handoff-only"), let uiDestination {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
+            process.arguments = ["-project", "Mainbrella.xcodeproj", "-scheme", "Mainbrella", "-destination", uiDestination,
+                "-derivedDataPath", "DerivedData", "-collect-test-diagnostics", "never",
+                "-only-testing:MainbrellaUITests/MainbrellaUITests/testProductionHandoff", "test"]
+            process.environment = ProcessInfo.processInfo.environment.merging([
+                "TEST_RUNNER_MAINBRELLA_UI_TEST_KEY": client.token,
+                "TEST_RUNNER_MAINBRELLA_UI_TEST_WORKSPACE_ID": workspace.id
+            ]) { _, new in new }
+            try process.run(); process.waitUntilExit()
+            try require(process.terminationStatus == 0, "Native handoff UI check failed")
+            struct Listing: Decodable { struct Entry: Decodable { let name: String }; let entries: [Entry] }
+            let listing = try JSONDecoder().decode(Listing.self, from: await client.request("containers/files/list", workspace: workspace,
+                query: [.init(name: "path", value: "/workspace/inbox")]))
+            var verified = false
+            for entry in listing.entries where entry.name.hasPrefix("message-") && entry.name.hasSuffix(".json") {
+                let data = try await client.request("containers/files", workspace: workspace,
+                    query: [.init(name: "path", value: "/workspace/inbox/" + entry.name)])
+                let saved = try JSONDecoder().decode(InboxMessage.self, from: data)
+                if saved.instruction == "iOS native handoff check" {
+                    try require(saved.generation == workspace.createdAt && saved.text == "Device QA notes for the current agent", "Native handoff readback differs")
+                    verified = true
+                }
+            }
+            try require(verified, "Native handoff completion is missing")
+            print("PASS: native Files picker, authenticated phone handoff, and production readback.")
+            return
+        }
         let job = try JSONDecoder().decode(Execution.self, from: await client.request("containers/executions", method: "POST", workspace: workspace,
             body: JSONSerialization.data(withJSONObject: ["command": "printf 'ios-check-output'; printf 'ios-check-error' >&2; exit 1", "timeoutMs": 30000]),
             idempotencyKey: "ios-job-" + id))
@@ -131,13 +186,19 @@ import CoreGraphics
         try require(recovered.contains { $0.id == job.id && !$0.running }, "Reconnect snapshot missed finished execution")
         let server = Data("require('http').createServer((req,res)=>res.end('ios-preview-check')).listen(3000,'0.0.0.0');".utf8)
         try await client.upload(server, path: "/tmp/ios-preview-check.cjs", workspace: workspace)
-        _ = try await client.request("containers/exec", method: "POST", workspace: workspace,
-            body: JSONSerialization.data(withJSONObject: ["command": "nohup node /tmp/ios-preview-check.cjs >/tmp/ios-preview-check.log 2>&1 </dev/null & sleep 1", "timeoutMs": 30000]))
+        // Keep the preview server in a retained managed job with a bounded
+        // lifetime throughout the UI check.
+        let serverJob = try JSONDecoder().decode(Execution.self, from: await client.request("containers/executions", method: "POST", workspace: workspace,
+            body: JSONSerialization.data(withJSONObject: ["command": "node /tmp/ios-preview-check.cjs", "timeoutMs": 900000]),
+            idempotencyKey: "ios-preview-server-" + id))
+        _ = try await nextActivity(activity) { $0.resource == .executions && $0.executionId == serverJob.id && $0.createdAt == workspace.createdAt }
+        // One startup grace period, with no repeated reads or polling timer.
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         let grant = try await client.createPreview(workspace, port: 3000)
         _ = try await nextActivity(activity) { $0.resource == .previews && $0.containerId == workspace.id && $0.createdAt == workspace.createdAt }
         guard let url = grant.url else { throw CheckFailure(message: "Missing protected URL") }
         let (page, response) = try await URLSession.shared.data(from: url)
-        try require((response as? HTTPURLResponse)?.statusCode == 200 && String(data: page, encoding: .utf8) == "ios-preview-check", "Protected preview failed")
+        try require((response as? HTTPURLResponse)?.statusCode == 200 && String(data: page, encoding: .utf8) == "ios-preview-check", "Protected preview failed (HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0), \(page.count) bytes)")
         if let uiDestination {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")

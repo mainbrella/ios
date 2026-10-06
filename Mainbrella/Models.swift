@@ -54,6 +54,7 @@ struct InboxMessage: Codable {
     let instruction: String
     let text: String
     let attachment: String?
+    var attachmentName: String? = nil
 }
 
 struct PreviewGrant: Codable, Identifiable {

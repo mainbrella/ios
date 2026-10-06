@@ -110,11 +110,16 @@ import XCTest
         sendInbox.tap()
         let instruction = app.textFields["Instruction for the agent"]
         XCTAssertTrue(instruction.waitForExistence(timeout: 5))
+        let attachFile = app.buttons["Attach a file"]
+        XCTAssertTrue(attachFile.waitForExistence(timeout: 5))
+        attachFile.tap()
+        dismissFilePicker(app)
+        XCTAssertTrue(instruction.waitForExistence(timeout: 5))
         instruction.tap(); instruction.typeText("iOS production handoff check")
         app.textFields["Context for the agent"].tap()
         app.textFields["Context for the agent"].typeText("https://mainbrella.com/")
         app.swipeUp()
-        app.buttons["Send to workspace"].tap()
+        app.buttons["submit-inbox-message"].tap()
         XCTAssertTrue(app.staticTexts["Saved to workspace inbox"].waitForExistence(timeout: 35))
         app.buttons["Done"].tap()
         app.buttons["open-preview-\(workspaceID)"].tap()
@@ -140,6 +145,43 @@ import XCTest
         add(screenshot)
     }
 
+    func testProductionHandoff() throws {
+        guard let key = ProcessInfo.processInfo.environment["MAINBRELLA_UI_TEST_KEY"],
+              let workspaceID = ProcessInfo.processInfo.environment["MAINBRELLA_UI_TEST_WORKSPACE_ID"] else {
+            throw XCTSkip("Explicit production credentials and a test-owned workspace are required.")
+        }
+        let app = XCUIApplication(); app.launch()
+        guard app.secureTextFields["API key"].waitForExistence(timeout: 10) else {
+            XCTFail("Use a simulator without an existing saved account key.")
+            return
+        }
+        addTeardownBlock {
+            app.terminate(); app.launch()
+            if app.tabBars.buttons["Account"].waitForExistence(timeout: 5) { app.tabBars.buttons["Account"].tap() }
+            else if app.buttons["Account"].exists { app.buttons["Account"].tap() }
+            if app.buttons["Remove saved key"].waitForExistence(timeout: 5) { app.buttons["Remove saved key"].tap() }
+        }
+        app.secureTextFields["API key"].tap(); app.secureTextFields["API key"].typeText(key)
+        app.buttons["Connect"].tap()
+        let projects = app.tabBars.buttons["Projects"]
+        XCTAssertTrue(projects.waitForExistence(timeout: 30)); projects.tap()
+        let send = app.buttons["send-inbox-\(workspaceID)"]
+        XCTAssertTrue(send.waitForExistence(timeout: 15)); send.tap()
+        let picker = app.buttons["Attach a file"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5)); picker.tap()
+        dismissFilePicker(app)
+        let instruction = app.textFields["Instruction for the agent"]
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: instruction)], timeout: 5), .completed)
+        instruction.tap(); instruction.typeText("iOS native handoff check")
+        app.textFields["Context for the agent"].tap()
+        app.textFields["Context for the agent"].typeText("Device QA notes for the current agent")
+        app.swipeUp()
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Native workspace handoff"; capture.lifetime = .keepAlways; add(capture)
+        app.buttons["submit-inbox-message"].tap()
+        XCTAssertTrue(app.staticTexts["Saved to workspace inbox"].waitForExistence(timeout: 35))
+    }
+
     func testRemoveSmokeAccount() throws {
         guard ProcessInfo.processInfo.environment["MAINBRELLA_REMOVE_SMOKE_ACCOUNT"] == "1" else {
             throw XCTSkip("Explicit recovery for a dedicated production-test simulator only.")
@@ -152,6 +194,14 @@ import XCTest
         XCTAssertTrue(app.buttons["Remove saved key"].waitForExistence(timeout: 10))
         app.buttons["Remove saved key"].tap()
         XCTAssertTrue(app.navigationBars["Connect to Mainbrella"].waitForExistence(timeout: 10))
+    }
+
+    private func dismissFilePicker(_ app: XCUIApplication) {
+        // The document picker embeds a remote accessibility tree. Scope the
+        // control to its navigation bar so we never tap the composer's Cancel.
+        let cancel = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"].buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        cancel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     private func createExecution(key: String, workspaceID: String, generation: String) throws -> String {

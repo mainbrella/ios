@@ -1,6 +1,8 @@
 import SwiftUI
 import PhotosUI
 import ImageIO
+import AVFoundation
+import UniformTypeIdentifiers
 
 struct ExecutionView: View {
     @EnvironmentObject private var store: AppStore
@@ -94,12 +96,16 @@ struct WorkspaceInboxView: View {
     @State private var text = ""
     @State private var photo: PhotosPickerItem?
     @State private var image: UIImage?
-    @State private var attachment: Data?
+    @State private var attachment: WorkspaceAttachment?
+    @State private var showCamera = false
+    @State private var showFiles = false
+    @State private var cameraDenied = false
+    @State private var preparationID = UUID()
     @State private var loadingPhoto = false
     @State private var sending = false
     @State private var sent = false
     @State private var failure: String?
-    @State private var messageID = UUID().uuidString.lowercased()
+    @State private var attempt: InboxAttempt?
     @FocusState private var editing: Bool
 
     var body: some View {
@@ -120,17 +126,34 @@ struct WorkspaceInboxView: View {
                     PhotosPicker(selection: $photo, matching: .images) {
                         Label(image == nil ? "Attach a photo or screenshot" : "Replace photo", systemImage: "photo")
                             .frame(minHeight: 44)
-                    }.disabled(sending)
-                    if loadingPhoto { ProgressView("Preparing photo…") }
+                    }.disabled(sending || loadingPhoto)
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        Button { Task { await openCamera() } } label: {
+                            Label("Take a photo", systemImage: "camera").frame(minHeight: 44)
+                        }.disabled(sending || loadingPhoto)
+                    }
+                    Button { showFiles = true } label: {
+                        Label("Attach a file", systemImage: "doc.badge.plus").frame(minHeight: 44)
+                    }.disabled(sending || loadingPhoto)
+                    if loadingPhoto { ProgressView("Preparing attachment…") }
+                    if cameraDenied {
+                        Link("Allow camera access in Settings", destination: URL(string: UIApplication.openSettingsURLString)!)
+                    }
                     if let image {
                         Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 220)
                             .accessibilityLabel("Attached photo")
-                        Button("Remove photo", role: .destructive) { photo = nil; self.image = nil; attachment = nil }
-                            .disabled(sending)
+                    }
+                    if let attachment {
+                        Label(attachment.name, systemImage: attachment.source == "ios-file" ? "doc" : "photo")
+                            .font(.subheadline).lineLimit(2)
+                        Text(attachment.data.count.formatted(.byteCount(style: .file))).font(.caption).foregroundStyle(Theme.muted)
+                        Button("Remove attachment", role: .destructive) { clearAttachment() }
+                            .disabled(sending || loadingPhoto)
                     }
                 } header: { Text("Context") }
             }
             Section {
+                if !workspaceAvailable && !sent { Text("This workspace has stopped or been replaced. Close this sheet and choose a running workspace.").foregroundStyle(.orange) }
                 if let failure { Text(failure).foregroundStyle(.orange) }
                 if sent {
                     Label("Saved to workspace inbox", systemImage: "checkmark.circle").foregroundStyle(Theme.green)
@@ -142,42 +165,96 @@ struct WorkspaceInboxView: View {
                     } label: {
                         HStack { Text(sending ? "Sending…" : "Send to workspace"); Spacer(); if sending { ProgressView() } else { Image(systemName: "paperplane") } }
                             .frame(minHeight: 44)
-                    }.disabled(sending || loadingPhoto || instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }.disabled(sending || loadingPhoto || !workspaceAvailable || instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityIdentifier("submit-inbox-message")
                 }
             } footer: {
-                Text("Saved in this workspace's inbox. An agent needs to read the inbox to act on your instruction.")
+                Text("One attachment per message. Files must be 1 MiB or smaller; photos are resized. An agent needs to read the workspace inbox to act on your instruction.")
             }
         }.scrollContentBackground(.hidden).scrollDismissesKeyboard(.interactively).background(Theme.background)
             .navigationTitle("Send to workspace").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() }.disabled(sending) } }
             .interactiveDismissDisabled(sending)
             .task(id: photo) { await loadPhoto() }
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraCapture { captured in
+                    showCamera = false
+                    guard let captured else { return }
+                    photo = nil
+                    preparePhoto(captured, source: "ios-camera")
+                }.ignoresSafeArea()
+            }
+            .fileImporter(isPresented: $showFiles, allowedContentTypes: [.item]) { result in
+                switch result {
+                case .success(let url): Task { await loadFile(url) }
+                case .failure(let error): failure = error.localizedDescription
+                }
+            }
+    }
+
+    private var workspaceAvailable: Bool {
+        store.workspaces.contains { $0.id == workspace.id && $0.createdAt == workspace.createdAt && $0.status == "running" }
+    }
+
+    private func clearAttachment() {
+        preparationID = UUID()
+        photo = nil; image = nil; attachment = nil; loadingPhoto = false
+    }
+
+    private func openCamera() async {
+        cameraDenied = false
+        let allowed: Bool
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: allowed = true
+        case .notDetermined: allowed = await AVCaptureDevice.requestAccess(for: .video)
+        default: allowed = false
+        }
+        if allowed { showCamera = true }
+        else { cameraDenied = true }
+    }
+
+    private func preparePhoto(_ image: UIImage, source: String) {
+        do {
+            let result = try WorkspaceAttachment.photo(image, source: source)
+            self.image = UIImage(data: result.data); attachment = result; failure = nil
+        } catch { failure = "This photo couldn't be prepared. Choose another photo or send text." }
     }
 
     private func loadPhoto() async {
         guard let photo else { return }
+        let id = UUID(); preparationID = id
         loadingPhoto = true; failure = nil
-        defer { if self.photo == photo { loadingPhoto = false } }
+        defer { if preparationID == id { loadingPhoto = false } }
         do {
             guard let data = try await photo.loadTransferable(type: Data.self) else { throw APIError.response(0, "photo") }
             let image = try InboxAttachment.image(data: data)
-            let bytes = try FeedbackEncoder.jpeg(image)
-            guard !Task.isCancelled else { return }
-            self.image = image; attachment = bytes
-        } catch { if !Task.isCancelled { failure = "This photo couldn't be prepared. Choose another photo or send text." } }
+            guard !Task.isCancelled, preparationID == id else { return }
+            preparePhoto(image, source: "ios-photo")
+        } catch { if !Task.isCancelled, preparationID == id { failure = "This photo couldn't be prepared. Choose another photo or send text." } }
+    }
+
+    private func loadFile(_ url: URL) async {
+        let id = UUID(); preparationID = id
+        loadingPhoto = true; failure = nil
+        defer { if preparationID == id { loadingPhoto = false } }
+        do {
+            let result = try await Task.detached { try WorkspaceAttachment.document(url) }.value
+            guard preparationID == id else { return }
+            photo = nil; image = nil; attachment = result
+        } catch { if preparationID == id { failure = error.localizedDescription } }
     }
 
     private func send() async {
+        guard workspaceAvailable, !sending, !loadingPhoto else { return }
         sending = true; failure = nil
         defer { sending = false }
         do {
-            let message = InboxMessage(version: 1, createdAt: ISO8601DateFormatter().string(from: Date()),
-                workspaceID: workspace.id, generation: workspace.createdAt,
-                source: attachment == nil ? "ios-text" : "ios-photo",
-                instruction: instruction.trimmingCharacters(in: .whitespacesAndNewlines), text: text,
-                attachment: attachment == nil ? nil : "message-\(messageID).jpg")
-            try await store.api.sendInbox(message, attachment: attachment, id: messageID, workspace: workspace)
+            let draft = InboxDraft(instruction: instruction.trimmingCharacters(in: .whitespacesAndNewlines),
+                                   text: text, attachment: attachment)
+            if attempt?.draft != draft { attempt = InboxAttempt(draft: draft, workspace: workspace) }
+            guard let attempt else { return }
+            try await store.api.sendInbox(attempt.message, attachment: attempt.draft.attachment?.data, id: attempt.id, workspace: workspace)
             sent = true
-        } catch { failure = "Your message wasn't fully saved. Your input is still here; try again." }
+        } catch { failure = error.localizedDescription + " Your input is still here; try again." }
     }
 }

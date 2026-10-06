@@ -206,7 +206,7 @@ struct WorkspacesView: View {
                         LabeledContent("Workspace", value: workspace.id).font(.caption)
                         LabeledContent("Expires", value: formatted(workspace.expiresAt)).font(.caption)
                         Button { inboxWorkspace = workspace } label: {
-                            Label("Send text or photo", systemImage: "paperplane").frame(minHeight: 44)
+                            Label("Send to workspace", systemImage: "paperplane").frame(minHeight: 44)
                         }.disabled(workspace.status != "running").accessibilityIdentifier("send-inbox-\(workspace.id)")
                     }
                     Button { selected = workspace; showPort = true } label: {

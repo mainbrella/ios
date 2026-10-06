@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
+    <key>NSCameraUsageDescription</key><string>Capture a photo to send with your instruction to a Mainbrella workspace.</string>
     <key>MainbrellaKeychainAccessGroup</key><string>$(AppIdentifierPrefix)com.mainbrella.shared</string>
     <key>MainbrellaLegacyKeychainAccessGroup</key><string>$(AppIdentifierPrefix)com.mainbrella.ios</string>
     <key>UISupportedInterfaceOrientations</key>
