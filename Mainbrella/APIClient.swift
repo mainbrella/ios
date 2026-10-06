@@ -81,7 +81,9 @@ struct APIClient {
         try JSONDecoder().decode(ExecutionDetail.self, from: await request("containers/executions/\(id)", workspace: workspace))
     }
     func sendInbox(_ message: InboxMessage, attachment: Data?, id: String, workspace: Workspace) async throws {
-        let metadata = try JSONEncoder().encode(message)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let metadata = try encoder.encode(message)
         guard metadata.count <= 1_048_576, (attachment?.count ?? 0) <= 1_048_576 else {
             throw APIError.response(413, "file_too_large")
         }
@@ -115,19 +117,47 @@ struct APIClient {
 
 enum Keychain {
     static let service = "com.mainbrella.ios"
+    private static var sharedGroup: String? { Bundle.main.object(forInfoDictionaryKey: "MainbrellaKeychainAccessGroup") as? String }
+    private static var legacyGroup: String? { Bundle.main.object(forInfoDictionaryKey: "MainbrellaLegacyKeychainAccessGroup") as? String }
+
     static func read() -> String {
+        if let value = read(group: sharedGroup) { return value }
+        // The containing app retains its original group to migrate installed accounts.
+        // The extension has no legacy-group entitlement or fallback.
+        if let legacyGroup, let value = read(group: legacyGroup) {
+            try? save(value)
+            return value
+        }
+        return ""
+    }
+    private static func query(group: String?) -> [String: Any] {
+        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                   kSecAttrAccount as String: "api-key"]
+        if let group { query[kSecAttrAccessGroup as String] = group }
+        return query
+    }
+    private static func read(group: String?) -> String? {
         var item: CFTypeRef?
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                  kSecAttrAccount as String: "api-key", kSecReturnData as String: true]
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return "" }
-        return String(data: data, encoding: .utf8) ?? ""
+        var query = query(group: group)
+        query[kSecReturnData as String] = true
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
     }
     static func save(_ value: String) throws {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "api-key"]
-        if value.isEmpty { SecItemDelete(query as CFDictionary); return }
+        let query = query(group: sharedGroup)
+        if value.isEmpty {
+            try delete(group: sharedGroup)
+            if let legacyGroup { try delete(group: legacyGroup) }
+            return
+        }
         let attributes: [String: Any] = [kSecValueData as String: Data(value.utf8), kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
         let updated = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         let status = updated == errSecItemNotFound ? SecItemAdd(query.merging(attributes) { _, new in new } as CFDictionary, nil) : updated
         guard status == errSecSuccess else { throw APIError.response(0, "keychain") }
+        if let legacyGroup { try delete(group: legacyGroup) }
+    }
+    private static func delete(group: String?) throws {
+        let status = SecItemDelete(query(group: group) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw APIError.response(0, "keychain") }
     }
 }

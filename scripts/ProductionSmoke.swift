@@ -58,7 +58,8 @@ import CoreGraphics
         _ = try await client.request("containers", method: "DELETE", workspace: workspace)
         try FileManager.default.removeItem(at: checkpoint)
         _ = try await nextActivity(activity) { $0.resource == .containers && $0.containerId == workspace.id && $0.createdAt == workspace.createdAt }
-        print("PASS: production WebSocket lifecycle/execution/preview events, reconnection snapshot, inbox round trip, execution output, protected preview and revocation. Temporary workspace stopped.")
+        let uiChecks = uiDestination == nil ? "" : ", native share readback and screenshot feedback"
+        print("PASS: production WebSocket lifecycle/execution/preview events, reconnection snapshot, inbox round trip, execution output, protected preview and revocation\(uiChecks). Temporary workspace stopped.")
     }
     static func openActivity(_ client: APIClient) async throws -> URLSessionWebSocketTask {
         let capabilities = try await client.capabilities()
@@ -141,7 +142,8 @@ import CoreGraphics
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
             process.arguments = ["-project", "Mainbrella.xcodeproj", "-scheme", "Mainbrella", "-destination", uiDestination,
-                "-derivedDataPath", "DerivedData", "-only-testing:MainbrellaUITests/MainbrellaUITests/testProductionWorkflow", "test"]
+                "-derivedDataPath", "DerivedData", "-collect-test-diagnostics", "never",
+                "-only-testing:MainbrellaUITests/MainbrellaUITests/testProductionWorkflow", "test"]
             process.environment = ProcessInfo.processInfo.environment.merging([
                 "TEST_RUNNER_MAINBRELLA_UI_TEST_KEY": client.token,
                 "TEST_RUNNER_MAINBRELLA_UI_TEST_WORKSPACE_ID": workspace.id,
@@ -157,6 +159,19 @@ import CoreGraphics
             }
             let listing = try JSONDecoder().decode(Listing.self, from: await client.request("containers/files/list", workspace: workspace,
                 query: [.init(name: "path", value: "/workspace/inbox")]))
+            var shareSaved = false
+            for entry in listing.entries where entry.name.hasPrefix("message-") && entry.name.hasSuffix(".json") {
+                let data = try await client.request("containers/files", workspace: workspace,
+                    query: [.init(name: "path", value: "/workspace/inbox/" + entry.name)])
+                let message = try JSONDecoder().decode(InboxMessage.self, from: data)
+                if message.source == "ios-share" {
+                    try require(message.workspaceID == workspace.id && message.generation == workspace.createdAt &&
+                        message.instruction == "Investigate this error from iPhone" && message.text == "ios-check-error",
+                        "System share extension saved incorrect content or workspace identity")
+                    shareSaved = true
+                }
+            }
+            try require(shareSaved, "System share extension did not save a message")
             guard let feedback = listing.entries.first(where: { $0.name.hasPrefix("feedback-") && $0.name.hasSuffix(".json") }) else {
                 throw CheckFailure(message: "UI feedback was not saved")
             }

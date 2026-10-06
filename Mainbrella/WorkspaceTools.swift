@@ -49,11 +49,15 @@ struct ExecutionView: View {
                             .padding(12)
                     }.background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
                 }
-                Button {
-                    UIPasteboard.general.string = text
-                    copied = true
-                } label: { Label(copied ? "Copied" : "Copy \(output.rawValue.lowercased())", systemImage: copied ? "checkmark" : "doc.on.doc").frame(minHeight: 44) }
-                    .disabled(text.isEmpty)
+                HStack(spacing: 24) {
+                    Button {
+                        UIPasteboard.general.string = text
+                        copied = true
+                    } label: { Label(copied ? "Copied" : "Copy \(output.rawValue.lowercased())", systemImage: copied ? "checkmark" : "doc.on.doc").frame(minHeight: 44) }
+                    ShareLink(item: text) {
+                        Label("Share \(output.rawValue.lowercased())", systemImage: "square.and.arrow.up").frame(minHeight: 44)
+                    }.accessibilityIdentifier("share-execution-output")
+                }.disabled(text.isEmpty)
             }
         }.padding(16).frame(maxWidth: 800).frame(maxWidth: .infinity).background(Theme.background)
             .navigationTitle("Execution").navigationBarTitleDisplayMode(.inline)
@@ -155,14 +159,8 @@ struct WorkspaceInboxView: View {
         loadingPhoto = true; failure = nil
         defer { if self.photo == photo { loadingPhoto = false } }
         do {
-            guard let data = try await photo.loadTransferable(type: Data.self),
-                  let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: 2048
-                  ] as CFDictionary) else { throw APIError.response(0, "photo") }
-            let image = UIImage(cgImage: thumbnail)
+            guard let data = try await photo.loadTransferable(type: Data.self) else { throw APIError.response(0, "photo") }
+            let image = try InboxAttachment.image(data: data)
             let bytes = try FeedbackEncoder.jpeg(image)
             guard !Task.isCancelled else { return }
             self.image = image; attachment = bytes

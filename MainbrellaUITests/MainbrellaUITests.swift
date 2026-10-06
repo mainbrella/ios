@@ -18,7 +18,7 @@ import XCTest
             XCTFail("Temporary production workspace identity is missing.")
             return
         }
-        defer {
+        addTeardownBlock {
             app.terminate(); app.launch()
             if app.tabBars.buttons["Account"].waitForExistence(timeout: 5) { app.tabBars.buttons["Account"].tap() }
             else if app.buttons["Account"].exists { app.buttons["Account"].tap() }
@@ -66,6 +66,43 @@ import XCTest
         executionScreenshot.name = "Production execution inspection"
         executionScreenshot.lifetime = .keepAlways
         add(executionScreenshot)
+        app.buttons["share-execution-output"].tap()
+        let systemShareScreenshot = XCTAttachment(screenshot: app.screenshot())
+        systemShareScreenshot.name = "System share sheet"
+        systemShareScreenshot.lifetime = .keepAlways
+        add(systemShareScreenshot)
+        var share = app.cells["Mainbrella"]
+        if !share.waitForExistence(timeout: 5) {
+            let more = app.cells["More"]
+            XCTAssertTrue(more.waitForExistence(timeout: 5))
+            more.tap()
+            share = app.cells["Mainbrella"]
+        }
+        XCTAssertTrue(share.waitForExistence(timeout: 10), "Mainbrella must be registered in the system share sheet")
+        share.tap()
+        XCTAssertTrue(app.navigationBars["Share to Mainbrella"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["Connect your account in Mainbrella, then share again."].exists,
+                       "The extension must read the account key saved by the containing app")
+        let shareInstruction = app.textFields["Instruction for the agent"]
+        XCTAssertTrue(shareInstruction.waitForExistence(timeout: 10))
+        shareInstruction.tap(); shareInstruction.typeText("Investigate this error from iPhone")
+        let shareDestination = app.buttons["share-workspace"]
+        if shareDestination.exists {
+            shareDestination.tap()
+            let destination = app.buttons.containing(NSPredicate(format: "label ENDSWITH %@", "· " + workspaceID)).firstMatch
+            XCTAssertTrue(destination.waitForExistence(timeout: 5))
+            destination.tap()
+        }
+        app.swipeUp()
+        let shareScreenshot = XCTAttachment(screenshot: app.screenshot())
+        shareScreenshot.name = "Production native share extension"
+        shareScreenshot.lifetime = .keepAlways
+        add(shareScreenshot)
+        XCTAssertTrue(app.buttons["Send to workspace"].isEnabled)
+        app.buttons["Send to workspace"].tap()
+        XCTAssertTrue(app.staticTexts["Saved to workspace inbox"].waitForExistence(timeout: 35))
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["Execution"].waitForExistence(timeout: 10))
         app.navigationBars["Execution"].buttons.element(boundBy: 0).tap()
         projects.tap()
         let sendInbox = app.buttons["send-inbox-\(workspaceID)"]
@@ -101,6 +138,20 @@ import XCTest
         screenshot.name = "Production screenshot handoff"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+    }
+
+    func testRemoveSmokeAccount() throws {
+        guard ProcessInfo.processInfo.environment["MAINBRELLA_REMOVE_SMOKE_ACCOUNT"] == "1" else {
+            throw XCTSkip("Explicit recovery for a dedicated production-test simulator only.")
+        }
+        let app = XCUIApplication()
+        app.launch()
+        if app.secureTextFields["API key"].waitForExistence(timeout: 3) && !app.tabBars.firstMatch.exists && !app.buttons["Account"].exists { return }
+        if app.tabBars.buttons["Account"].waitForExistence(timeout: 5) { app.tabBars.buttons["Account"].tap() }
+        else { app.buttons["Account"].tap() }
+        XCTAssertTrue(app.buttons["Remove saved key"].waitForExistence(timeout: 10))
+        app.buttons["Remove saved key"].tap()
+        XCTAssertTrue(app.navigationBars["Connect to Mainbrella"].waitForExistence(timeout: 10))
     }
 
     private func createExecution(key: String, workspaceID: String, generation: String) throws -> String {

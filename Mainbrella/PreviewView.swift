@@ -290,12 +290,3 @@ struct FeedbackView: View {
         } catch { failure = "Feedback wasn't fully uploaded. Your screenshot and instruction are still here; try again." }
     }
 }
-
-enum FeedbackEncoder {
-    static func jpeg(_ image: UIImage) throws -> Data {
-        for quality in [0.8, 0.6, 0.4, 0.2] {
-            if let data = image.jpegData(compressionQuality: quality), data.count <= 1_048_576 { return data }
-        }
-        throw APIError.response(413, "file_too_large")
-    }
-}

@@ -1,13 +1,5 @@
 import SwiftUI
 
-enum Theme {
-    static let background = Color(red: 0.045, green: 0.058, blue: 0.077)
-    static let surface = Color(red: 0.085, green: 0.100, blue: 0.124)
-    static let muted = Color(red: 0.66, green: 0.70, blue: 0.78)
-    static let blue = Color(red: 0.29, green: 0.48, blue: 1)
-    static let green = Color(red: 0.14, green: 0.82, blue: 0.65)
-}
-
 enum Destination: String, CaseIterable, Identifiable {
     case inbox = "Activity", projects = "Projects", previews = "Previews", account = "Account"
     var id: String { rawValue }
@@ -288,6 +280,11 @@ struct AccountView: View {
                 Text("Your key is stored in this device's Keychain. An active Mainbrella plan is required for previews and uploads.")
             }
             if store.connected {
+                Section {
+                    Label("Share to Mainbrella", systemImage: "square.and.arrow.up")
+                    Text("In Safari, Photos, or another app, share a link, text, or one image to a running workspace.")
+                        .font(.subheadline).foregroundStyle(Theme.muted)
+                }
                 Section {
                     Button("Remove saved key", role: .destructive) { store.disconnect() }.disabled(store.loading || store.previewBusy)
                 }

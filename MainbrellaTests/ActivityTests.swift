@@ -2,7 +2,7 @@ import XCTest
 import Combine
 @testable import Mainbrella
 
-private final class TestSocket: ActivitySocket, @unchecked Sendable {
+final class TestSocket: ActivitySocket, @unchecked Sendable {
     var responseStatus: Int?
     private let lock = NSLock()
     private var frames: [Result<URLSessionWebSocketTask.Message, Error>] = []
