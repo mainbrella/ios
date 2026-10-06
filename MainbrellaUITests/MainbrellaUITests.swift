@@ -1,6 +1,6 @@
 import XCTest
 
-final class MainbrellaUITests: XCTestCase {
+@MainActor final class MainbrellaUITests: XCTestCase {
     override func tearDown() { XCUIDevice.shared.orientation = .portrait }
 
     func testProductionWorkflow() throws {
@@ -29,6 +29,27 @@ final class MainbrellaUITests: XCTestCase {
         app.buttons["Connect"].tap()
         let projects = app.tabBars.buttons["Projects"].exists ? app.tabBars.buttons["Projects"] : app.buttons["Projects"]
         XCTAssertTrue(projects.waitForExistence(timeout: 30))
+        let liveStatus = app.descendants(matching: .any).matching(identifier: "live-status").firstMatch
+        XCTAssertTrue(liveStatus.waitForExistence(timeout: 15))
+        let live = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Live updates: Live"), object: liveStatus)
+        XCTAssertEqual(XCTWaiter.wait(for: [live], timeout: 15), .completed)
+        guard let generation = ProcessInfo.processInfo.environment["MAINBRELLA_UI_TEST_GENERATION"] else {
+            XCTFail("Production generation is missing.")
+            return
+        }
+        // The workspace is owned by the smoke test. Create real work after the UI
+        // has attached, then verify that both the list and open output update.
+        let liveExecutionID = try createExecution(key: key, workspaceID: workspaceID, generation: generation)
+        let liveExecution = app.descendants(matching: .any).matching(identifier: "execution-\(workspaceID)-\(liveExecutionID)").firstMatch
+        XCTAssertTrue(liveExecution.waitForExistence(timeout: 30))
+        liveExecution.tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "ios-live-finished")).firstMatch.waitForExistence(timeout: 35))
+        XCTAssertTrue(app.staticTexts["Succeeded"].exists)
+        let liveScreenshot = XCTAttachment(screenshot: app.screenshot())
+        liveScreenshot.name = "Live execution updated over WebSocket"
+        liveScreenshot.lifetime = .keepAlways
+        add(liveScreenshot)
+        app.navigationBars["Execution"].buttons.element(boundBy: 0).tap()
         guard let executionID = ProcessInfo.processInfo.environment["MAINBRELLA_UI_TEST_EXECUTION_ID"] else {
             XCTFail("Production execution identity is missing.")
             return
@@ -80,6 +101,34 @@ final class MainbrellaUITests: XCTestCase {
         screenshot.name = "Production screenshot handoff"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+    }
+
+    private func createExecution(key: String, workspaceID: String, generation: String) throws -> String {
+        var url = URLComponents(string: "https://api.mainbrella.com/containers/executions")!
+        url.queryItems = [.init(name: "id", value: workspaceID), .init(name: "createdAt", value: generation)]
+        var request = URLRequest(url: url.url!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("ios-live-ui-" + UUID().uuidString.lowercased(), forHTTPHeaderField: "Idempotency-Key")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "command": "printf 'ios-live-start\\n'; sleep 8; printf 'ios-live-finished\\n'", "timeoutMs": 30000
+        ])
+        let completed = expectation(description: "Production execution created")
+        var executionID: String?
+        URLSession.shared.dataTask(with: request) { data, response, _ in
+            if let data, let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode),
+               let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                executionID = result["id"] as? String
+            }
+            completed.fulfill()
+        }.resume()
+        wait(for: [completed], timeout: 35)
+        guard let executionID else {
+            throw NSError(domain: "MainbrellaProductionTest", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Production test execution could not be created"])
+        }
+        return executionID
     }
 
     func testDisconnectedAccountGate() throws {

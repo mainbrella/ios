@@ -51,6 +51,24 @@ struct APIClient {
         return data
     }
     private struct Failure: Decodable { let error: String }
+    func capabilities() async throws -> Capabilities {
+        try JSONDecoder().decode(Capabilities.self, from: await request("capabilities"))
+    }
+    func activityRequest() throws -> URLRequest {
+        var components = URLComponents(url: baseURL.appendingPathComponent("containers/activity"), resolvingAgainstBaseURL: false)!
+        switch components.scheme {
+        case "https": components.scheme = "wss"
+        case "http": components.scheme = "ws"
+        default: throw APIError.invalidURL
+        }
+        components.query = nil
+        components.fragment = nil
+        guard let url = components.url else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 15
+        return request
+    }
     func workspaces() async throws -> [Workspace] {
         struct Response: Decodable { let containers: [Workspace] }
         return try JSONDecoder().decode(Response.self, from: await request("containers")).containers

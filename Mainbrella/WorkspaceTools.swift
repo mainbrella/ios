@@ -12,6 +12,7 @@ struct ExecutionView: View {
     @State private var updatedAt: Date?
     @State private var output = Output.standard
     @State private var copied = false
+    @State private var loadID = UUID()
 
     private enum Output: String, CaseIterable { case standard = "Output", errors = "Errors" }
     private var text: String { output == .standard ? detail?.stdout ?? "" : detail?.stderr ?? "" }
@@ -29,17 +30,25 @@ struct ExecutionView: View {
                 }
             }
             if let failure { Text(failure).font(.subheadline).foregroundStyle(.orange) }
+            if let explanation = store.liveState.explanation {
+                Text(explanation).font(.subheadline).foregroundStyle(Theme.muted)
+            }
             Picker("Execution output", selection: $output) {
                 ForEach(Output.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }.pickerStyle(.segmented)
             if loading && detail == nil {
                 ProgressView("Loading execution…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView([.horizontal, .vertical]) {
-                    Text(text.isEmpty ? "No \(output == .errors ? "error " : "")output captured." : text)
-                        .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .topLeading).padding(12)
-                }.background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
+                GeometryReader { geometry in
+                    ScrollView([.horizontal, .vertical]) {
+                        Text(text.isEmpty ? "No \(output == .errors ? "error " : "")output captured." : text)
+                            .font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                            .fixedSize(horizontal: true, vertical: true)
+                            .frame(minWidth: max(0, geometry.size.width - 24),
+                                   minHeight: max(0, geometry.size.height - 24), alignment: .topLeading)
+                            .padding(12)
+                    }.background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
+                }
                 Button {
                     UIPasteboard.general.string = text
                     copied = true
@@ -55,20 +64,21 @@ struct ExecutionView: View {
                     }.disabled(loading).accessibilityLabel("Refresh execution")
                 }
             }
-            .task { await load() }
+            .task(id: store.executionVersions[workspace.id, default: 0]) { await load() }
             .onChange(of: output) { _, _ in copied = false }
     }
 
     private func load() async {
-        guard !loading else { return }
+        let id = UUID()
+        loadID = id
         loading = true; failure = nil
-        defer { loading = false }
+        defer { if loadID == id { loading = false } }
         do {
             let result = try await store.api.execution(execution.id, workspace: workspace)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, loadID == id else { return }
             detail = result; updatedAt = Date(); copied = false
             if detail?.stdout.isEmpty == true && detail?.stderr.isEmpty == false { output = .errors }
-        } catch { if !Task.isCancelled { failure = error.localizedDescription } }
+        } catch { if !Task.isCancelled, loadID == id { failure = error.localizedDescription } }
     }
 }
 

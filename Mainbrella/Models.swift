@@ -17,6 +17,21 @@ struct Execution: Codable, Identifiable {
     var statusLabel: String { status.replacingOccurrences(of: "_", with: " ").capitalized }
 }
 
+/// Activity frames contain invalidation hints, never execution output or preview URLs.
+struct ActivityFrame: Decodable {
+    enum Resource: String, Decodable { case containers, executions, previews }
+    let type: String
+    let resource: Resource?
+    let containerId: String?
+    let createdAt: String?
+    let executionId: String?
+}
+
+struct Capabilities: Decodable {
+    struct Observability: Decodable { let activityWebSocket: Bool }
+    let observability: Observability
+}
+
 struct ExecutionDetail: Decodable {
     let execution: Execution
     let stdout: String

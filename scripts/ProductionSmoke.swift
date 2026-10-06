@@ -31,6 +31,10 @@ import CoreGraphics
         let token = String(entry.dropFirst("MAINBRELLA_API_KEY=".count)).trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
         let client = APIClient(baseURL: ServiceURLs.api, token: token)
+        let activity = try await openActivity(client)
+        defer { activity.cancel(with: .goingAway, reason: nil) }
+        // Initial state is read only after the server confirms attachment.
+        _ = try await client.workspaces()
         let key = "ios-check-" + UUID().uuidString.lowercased()
         let checkpoint = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(key + ".json")
         try JSONSerialization.data(withJSONObject: ["creationKey": key]).write(to: checkpoint)
@@ -43,7 +47,8 @@ import CoreGraphics
         }
         try JSONSerialization.data(withJSONObject: ["creationKey": key, "id": workspace.id, "createdAt": workspace.createdAt]).write(to: checkpoint)
         do {
-            try await check(client, workspace: workspace, uiDestination: uiDestination)
+            _ = try await nextActivity(activity) { $0.resource == .containers && $0.containerId == workspace.id && $0.createdAt == workspace.createdAt }
+            try await check(client, workspace: workspace, activity: activity, uiDestination: uiDestination)
         } catch {
             _ = try await client.request("containers", method: "DELETE", workspace: workspace)
             try FileManager.default.removeItem(at: checkpoint)
@@ -52,9 +57,47 @@ import CoreGraphics
         }
         _ = try await client.request("containers", method: "DELETE", workspace: workspace)
         try FileManager.default.removeItem(at: checkpoint)
-        print("PASS: production decoding, inbox round trip, execution output, protected preview and revocation. Temporary workspace stopped.")
+        _ = try await nextActivity(activity) { $0.resource == .containers && $0.containerId == workspace.id && $0.createdAt == workspace.createdAt }
+        print("PASS: production WebSocket lifecycle/execution/preview events, reconnection snapshot, inbox round trip, execution output, protected preview and revocation. Temporary workspace stopped.")
     }
-    static func check(_ client: APIClient, workspace: Workspace, uiDestination: String?) async throws {
+    static func openActivity(_ client: APIClient) async throws -> URLSessionWebSocketTask {
+        let capabilities = try await client.capabilities()
+        try require(capabilities.observability.activityWebSocket, "Production activity WebSocket is disabled")
+        let socket = client.session.webSocketTask(with: try client.activityRequest())
+        socket.maximumMessageSize = 2048
+        socket.resume()
+        do {
+            _ = try await nextActivity(socket) { $0.type == "ready" }
+            return socket
+        } catch { socket.cancel(with: .goingAway, reason: nil); throw error }
+    }
+    static func nextActivity(_ socket: URLSessionWebSocketTask,
+                             matching: @escaping @Sendable (ActivityFrame) -> Bool) async throws -> ActivityFrame {
+        try await withThrowingTaskGroup(of: ActivityFrame.self) { group in
+            group.addTask {
+                while !Task.isCancelled {
+                    let message = try await socket.receive()
+                    let data: Data
+                    switch message {
+                    case .string(let text): data = Data(text.utf8)
+                    case .data(let bytes): data = bytes
+                    @unknown default: continue
+                    }
+                    let frame = try JSONDecoder().decode(ActivityFrame.self, from: data)
+                    if matching(frame) { return frame }
+                }
+                throw CancellationError()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 30_000_000_000)
+                socket.cancel(with: .goingAway, reason: nil)
+                throw CheckFailure(message: "Timed out waiting for production activity event")
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
+        }
+    }
+    static func check(_ client: APIClient, workspace: Workspace, activity: URLSessionWebSocketTask, uiDestination: String?) async throws {
         let spaces = try await client.workspaces()
         try require(spaces.contains(workspace), "Workspace decoding failed")
         let id = UUID().uuidString.lowercased()
@@ -73,16 +116,24 @@ import CoreGraphics
         let job = try JSONDecoder().decode(Execution.self, from: await client.request("containers/executions", method: "POST", workspace: workspace,
             body: JSONSerialization.data(withJSONObject: ["command": "printf 'ios-check-output'; printf 'ios-check-error' >&2; exit 1", "timeoutMs": 30000]),
             idempotencyKey: "ios-job-" + id))
-        // Consume the supported server stream once; never poll execution state.
-        _ = try await client.request("containers/executions/\(job.id)/events", workspace: workspace)
-        let detail = try await client.execution(job.id, workspace: workspace)
+        // Fetch output only in response to status invalidations; never poll.
+        var detail: ExecutionDetail
+        repeat {
+            _ = try await nextActivity(activity) { $0.resource == .executions && $0.executionId == job.id && $0.createdAt == workspace.createdAt }
+            detail = try await client.execution(job.id, workspace: workspace)
+        } while detail.execution.running
         try require(detail.execution.needsReview && detail.stdout == "ios-check-output" && detail.stderr == "ios-check-error", "Execution output differs")
         _ = try await client.executions(workspace)
+        let reconnected = try await openActivity(client)
+        let recovered = try await client.executions(workspace)
+        reconnected.cancel(with: .goingAway, reason: nil)
+        try require(recovered.contains { $0.id == job.id && !$0.running }, "Reconnect snapshot missed finished execution")
         let server = Data("require('http').createServer((req,res)=>res.end('ios-preview-check')).listen(3000,'0.0.0.0');".utf8)
         try await client.upload(server, path: "/tmp/ios-preview-check.cjs", workspace: workspace)
         _ = try await client.request("containers/exec", method: "POST", workspace: workspace,
             body: JSONSerialization.data(withJSONObject: ["command": "nohup node /tmp/ios-preview-check.cjs >/tmp/ios-preview-check.log 2>&1 </dev/null & sleep 1", "timeoutMs": 30000]))
         let grant = try await client.createPreview(workspace, port: 3000)
+        _ = try await nextActivity(activity) { $0.resource == .previews && $0.containerId == workspace.id && $0.createdAt == workspace.createdAt }
         guard let url = grant.url else { throw CheckFailure(message: "Missing protected URL") }
         let (page, response) = try await URLSession.shared.data(from: url)
         try require((response as? HTTPURLResponse)?.statusCode == 200 && String(data: page, encoding: .utf8) == "ios-preview-check", "Protected preview failed")
@@ -94,6 +145,7 @@ import CoreGraphics
             process.environment = ProcessInfo.processInfo.environment.merging([
                 "TEST_RUNNER_MAINBRELLA_UI_TEST_KEY": client.token,
                 "TEST_RUNNER_MAINBRELLA_UI_TEST_WORKSPACE_ID": workspace.id,
+                "TEST_RUNNER_MAINBRELLA_UI_TEST_GENERATION": workspace.createdAt,
                 "TEST_RUNNER_MAINBRELLA_UI_TEST_EXECUTION_ID": job.id
             ]) { _, new in new }
             try process.run()
@@ -119,6 +171,7 @@ import CoreGraphics
             try require(hasOrangeMarks(marked), "Screenshot annotation pixels missing")
         }
         try await client.revokePreview(workspace, id: grant.id)
+        _ = try await nextActivity(activity) { $0.resource == .previews && $0.containerId == workspace.id && $0.createdAt == workspace.createdAt }
         let grants = try await client.previews(workspace)
         try require(!grants.contains { $0.id == grant.id }, "Grant still listed after revocation")
     }
@@ -138,6 +191,11 @@ import CoreGraphics
         }
     }
     static func simulatorDestination() throws -> String {
+        if let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--simulator-id=") }) {
+            let id = String(argument.dropFirst("--simulator-id=".count))
+            try require(UUID(uuidString: id) != nil, "Invalid simulator ID")
+            return "platform=iOS Simulator,id=\(id)"
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         process.arguments = ["simctl", "list", "devices", "available", "-j"]

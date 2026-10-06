@@ -61,9 +61,8 @@ struct RootView: View {
                 Button("OK") { store.error = nil }
             } message: { Text(store.error ?? "") }
             .onChange(of: store.connected) { _, _ in destination = .inbox }
-            .task { await store.refresh() }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active { Task { await store.refresh() } }
+            .task(id: LiveSessionIdentity(revision: store.revision, active: scenePhase == .active)) {
+                if scenePhase == .active { await store.followActivity() }
             }
         }
     }
@@ -75,6 +74,22 @@ struct RootView: View {
         case .previews: WorkspacesView(previewsOnly: true)
         case .account: AccountView()
         }
+    }
+}
+
+private struct LiveSessionIdentity: Equatable {
+    let revision: Int
+    let active: Bool
+}
+
+struct LiveStatus: View {
+    @EnvironmentObject private var store: AppStore
+    var body: some View {
+        Label(store.liveState.rawValue, systemImage: store.liveState == .live ? "bolt.horizontal.circle" : "wifi.exclamationmark")
+            .labelStyle(.titleAndIcon)
+            .font(.caption).foregroundStyle(store.liveState == .live ? Theme.green : Theme.muted)
+            .accessibilityLabel("Live updates: \(store.liveState.rawValue)")
+            .accessibilityIdentifier("live-status")
     }
 }
 
@@ -98,6 +113,9 @@ struct InboxView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                if let explanation = store.liveState.explanation {
+                    Text(explanation).font(.subheadline).foregroundStyle(Theme.muted)
+                }
                 if let error = store.syncError {
                     Label(error, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.orange)
                 }
@@ -123,6 +141,7 @@ struct InboxView: View {
                 }
             }.padding(20).frame(maxWidth: 680, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Theme.background).navigationTitle("Activity").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { LiveStatus() } }
             .refreshable { await store.refresh() }
     }
     private enum JobGroup { case review, working, finished
@@ -205,7 +224,7 @@ struct WorkspacesView: View {
                     ForEach(store.grants[workspace.id, default: []]) { grant in
                         HStack {
                             VStack(alignment: .leading) {
-                                Text("Port \(grant.port)")
+                                Text("Port \(String(grant.port))")
                                 Text("Expires \(Date(timeIntervalSince1970: grant.expiresAt / 1000).formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(Theme.muted)
                             }
                             Spacer()
@@ -216,13 +235,14 @@ struct WorkspacesView: View {
             }
         }.scrollContentBackground(.hidden).background(Theme.background)
             .navigationTitle(previewsOnly ? "Previews" : "Projects").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { LiveStatus() } }
             .refreshable { await store.refresh() }
             .sheet(item: $inboxWorkspace) { workspace in
                 NavigationStack { WorkspaceInboxView(workspace: workspace) }.environmentObject(store)
             }
             .confirmationDialog("Revoke protected preview?", isPresented: Binding(get: { revocation != nil }, set: { if !$0 { revocation = nil } }), titleVisibility: .visible) {
                 if let item = revocation {
-                    Button("Revoke port \(item.grant.port)", role: .destructive) { Task { await store.revoke(item.workspace, grant: item.grant) }; revocation = nil }
+                    Button("Revoke port \(String(item.grant.port))", role: .destructive) { Task { await store.revoke(item.workspace, grant: item.grant) }; revocation = nil }
                 }
             } message: { Text("Anyone using this link will lose access.") }
             .alert("Open preview", isPresented: $showPort) {
@@ -253,6 +273,7 @@ struct AccountView: View {
         Form {
             Section {
                 LabeledContent("Status", value: store.connected ? "Connected" : "Not connected")
+                if store.connected { LabeledContent("Live updates", value: store.liveState.rawValue) }
                 LabeledContent("API", value: ServiceURLs.api.host ?? "")
                 HStack {
                     Text("API key")
