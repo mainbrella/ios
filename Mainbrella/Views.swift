@@ -60,7 +60,7 @@ struct RootView: View {
             } message: { Text(store.error ?? "") }
             .onChange(of: store.connected) { wasConnected, connected in
                 destination = .inbox
-                signInRequired = wasConnected && !connected
+                signInRequired = wasConnected && !connected && store.authenticationError != nil
             }
             .task(id: LiveSessionIdentity(revision: store.revision, active: scenePhase == .active)) {
                 if scenePhase == .active { await store.followActivity() }

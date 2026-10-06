@@ -200,7 +200,9 @@ import XCTest
         else { app.buttons["Account"].tap() }
         XCTAssertTrue(app.buttons["Remove saved key"].waitForExistence(timeout: 10))
         app.buttons["Remove saved key"].tap()
-        XCTAssertTrue(app.navigationBars["Sign in to Mainbrella"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["welcome-get-started"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["welcome-headline"].exists)
+        XCTAssertFalse(app.textFields["login-email"].exists)
     }
 
     private func dismissFilePicker(_ app: XCUIApplication) {
