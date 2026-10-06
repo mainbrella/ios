@@ -3,13 +3,13 @@ import Foundation
 enum LiveState: String {
     case paused = "Paused", connecting = "Connecting", live = "Live"
     case reconnecting = "Reconnecting", unavailable = "Unavailable"
-    case authenticationRequired = "Update API key"
+    case authenticationRequired = "Sign-in required"
 
     var explanation: String? {
         switch self {
         case .reconnecting: return "Live updates disconnected. Reconnecting automatically…"
         case .unavailable: return "This server doesn't support live updates. Pull to refresh."
-        case .authenticationRequired: return "Live updates require a valid API key. Update it in Account."
+        case .authenticationRequired: return "Live updates require a valid account. Sign in again in Account."
         default: return nil
         }
     }

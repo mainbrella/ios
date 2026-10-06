@@ -12,6 +12,10 @@ settings:
     MARKETING_VERSION: '1.0'
     INFOPLIST_KEY_CFBundleVersion: $(CURRENT_PROJECT_VERSION)
     INFOPLIST_KEY_CFBundleShortVersionString: $(MARKETING_VERSION)
+packages:
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 9.0.0
 targets:
   Mainbrella:
     type: application
@@ -22,6 +26,10 @@ targets:
     dependencies:
       - target: MainbrellaShare
         embed: true
+      - package: GoogleSignIn
+        product: GoogleSignIn
+      - package: GoogleSignIn
+        product: GoogleSignInSwift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mainbrella.ios

@@ -10,6 +10,8 @@ import XCTest
         if UIDevice.current.userInterfaceIdiom == .pad { XCUIDevice.shared.orientation = .landscapeLeft }
         let app = XCUIApplication()
         app.launch()
+        XCTAssertTrue(app.buttons["Use an API key"].waitForExistence(timeout: 10))
+        app.buttons["Use an API key"].tap()
         guard app.secureTextFields["API key"].waitForExistence(timeout: 10) else {
             XCTFail("Use a simulator without an existing saved account key.")
             return
@@ -81,7 +83,7 @@ import XCTest
         XCTAssertTrue(share.waitForExistence(timeout: 10), "Mainbrella must be registered in the system share sheet")
         share.tap()
         XCTAssertTrue(app.navigationBars["Share to Mainbrella"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.staticTexts["Connect your account in Mainbrella, then share again."].exists,
+        XCTAssertFalse(app.staticTexts["Sign in to Mainbrella, then share again."].exists,
                        "The extension must read the account key saved by the containing app")
         let shareInstruction = app.textFields["Instruction for the agent"]
         XCTAssertTrue(shareInstruction.waitForExistence(timeout: 10))
@@ -151,6 +153,8 @@ import XCTest
             throw XCTSkip("Explicit production credentials and a test-owned workspace are required.")
         }
         let app = XCUIApplication(); app.launch()
+        XCTAssertTrue(app.buttons["Use an API key"].waitForExistence(timeout: 10))
+        app.buttons["Use an API key"].tap()
         guard app.secureTextFields["API key"].waitForExistence(timeout: 10) else {
             XCTFail("Use a simulator without an existing saved account key.")
             return
@@ -188,12 +192,12 @@ import XCTest
         }
         let app = XCUIApplication()
         app.launch()
-        if app.secureTextFields["API key"].waitForExistence(timeout: 3) && !app.tabBars.firstMatch.exists && !app.buttons["Account"].exists { return }
+        if app.buttons["google-sign-in"].waitForExistence(timeout: 3) && !app.tabBars.firstMatch.exists && !app.buttons["Account"].exists { return }
         if app.tabBars.buttons["Account"].waitForExistence(timeout: 5) { app.tabBars.buttons["Account"].tap() }
         else { app.buttons["Account"].tap() }
         XCTAssertTrue(app.buttons["Remove saved key"].waitForExistence(timeout: 10))
         app.buttons["Remove saved key"].tap()
-        XCTAssertTrue(app.navigationBars["Connect to Mainbrella"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Sign in to Mainbrella"].waitForExistence(timeout: 10))
     }
 
     private func dismissFilePicker(_ app: XCUIApplication) {
@@ -235,34 +239,68 @@ import XCTest
     func testDisconnectedAccountGate() throws {
         let app = XCUIApplication()
         app.launch()
-        XCTAssertTrue(app.navigationBars["Connect to Mainbrella"].waitForExistence(timeout: 10),
-                      "Run account-gate tests on a simulator without a saved API key.")
-        XCTAssertTrue(app.navigationBars["Connect to Mainbrella"].exists)
-        XCTAssertTrue(app.secureTextFields["API key"].exists)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "api.mainbrella.com")).firstMatch.exists)
-        XCTAssertFalse(app.buttons["Connect"].isEnabled)
+        XCTAssertTrue(app.navigationBars["Sign in to Mainbrella"].waitForExistence(timeout: 10),
+                      "Run account-gate tests on a simulator without a saved account.")
+        XCTAssertTrue(app.buttons["google-sign-in"].isHittable)
+        XCTAssertTrue(app.textFields["login-email"].exists)
+        XCTAssertTrue(app.secureTextFields["login-password"].exists)
+        XCTAssertFalse(app.secureTextFields["API key"].exists)
+        XCTAssertFalse(app.buttons["email-sign-in"].isEnabled)
         XCTAssertFalse(app.tabBars.firstMatch.exists)
-        XCTAssertFalse(app.buttons["Approve"].exists)
         XCTAssertFalse(app.buttons["Open preview"].exists)
+        app.textFields["login-email"].tap()
+        app.textFields["login-email"].typeText("person@example.com")
+        XCTAssertFalse(app.buttons["email-sign-in"].isEnabled)
+        app.secureTextFields["login-password"].tap()
+        app.secureTextFields["login-password"].typeText("password123")
+        XCTAssertTrue(app.buttons["email-sign-in"].isEnabled)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Native sign-in"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    func testOptionalAPIKeyConnection() throws {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["Use an API key"].waitForExistence(timeout: 10))
+        app.buttons["Use an API key"].tap()
+        XCTAssertTrue(app.secureTextFields["API key"].exists)
+        XCTAssertFalse(app.buttons["Connect"].isEnabled)
         app.secureTextFields["API key"].tap()
         app.secureTextFields["API key"].typeText("   ")
         XCTAssertFalse(app.buttons["Connect"].isEnabled)
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "Account connection"
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
+    }
+
+    func testGoogleSignInPresentationAndCancellation() throws {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["google-sign-in"].waitForExistence(timeout: 10))
+        app.buttons["google-sign-in"].tap()
+        let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let consent = system.alerts.buttons["Continue"]
+        if consent.waitForExistence(timeout: 5) { consent.tap() }
+        let cancel = app.buttons["Cancel"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 15), "Google sign-in should present the system authentication sheet")
+        cancel.tap()
+        XCTAssertTrue(app.navigationBars["Sign in to Mainbrella"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["google-sign-in"].isEnabled)
+        XCTAssertFalse(app.descendants(matching: .any)["authentication-error"].exists)
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
     }
 
     func testTabletAccountGateRotation() throws {
         guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Tablet layout check") }
         let app = XCUIApplication()
         app.launch()
-        XCTAssertTrue(app.navigationBars["Connect to Mainbrella"].waitForExistence(timeout: 10),
-                      "Run account-gate tests on a simulator without a saved API key.")
+        XCTAssertTrue(app.navigationBars["Sign in to Mainbrella"].waitForExistence(timeout: 10),
+                      "Run account-gate tests on a simulator without a saved account.")
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             XCUIDevice.shared.orientation = orientation
-            XCTAssertTrue(app.secureTextFields["API key"].isHittable)
-            XCTAssertTrue(app.buttons["Create an API key"].isHittable)
+            XCTAssertTrue(app.buttons["google-sign-in"].isHittable)
+            XCTAssertTrue(app.textFields["login-email"].isHittable)
+            XCTAssertTrue(app.secureTextFields["login-password"].isHittable)
+            XCTAssertTrue(app.buttons["email-sign-in"].isHittable)
         }
     }
 }

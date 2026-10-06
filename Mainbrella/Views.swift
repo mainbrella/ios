@@ -257,39 +257,3 @@ private struct PreviewRevocation {
     let workspace: Workspace
     let grant: PreviewGrant
 }
-
-struct AccountView: View {
-    @EnvironmentObject var store: AppStore
-    @State private var token = ""
-    var body: some View {
-        Form {
-            Section {
-                LabeledContent("Status", value: store.connected ? "Connected" : "Not connected")
-                if store.connected { LabeledContent("Live updates", value: store.liveState.rawValue) }
-                LabeledContent("API", value: ServiceURLs.api.host ?? "")
-                HStack {
-                    Text("API key")
-                    SecureField("Paste your API key", text: $token).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .accessibilityLabel("API key")
-                }
-                Button(store.loading ? "Connecting…" : store.connected ? "Update API key" : "Connect") {
-                    Task { if await store.connect(token: token) { token = "" } }
-                }.disabled(store.loading || store.previewBusy || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Link("Create an API key", destination: ServiceURLs.apiKeys)
-            } header: { Text("Connection") } footer: {
-                Text("Your key is stored in this device's Keychain. An active Mainbrella plan is required for previews and uploads.")
-            }
-            if store.connected {
-                Section {
-                    Label("Share to Mainbrella", systemImage: "square.and.arrow.up")
-                    Text("In Safari, Photos, or another app, share a link, text, or one image to a running workspace.")
-                        .font(.subheadline).foregroundStyle(Theme.muted)
-                }
-                Section {
-                    Button("Remove saved key", role: .destructive) { store.disconnect() }.disabled(store.loading || store.previewBusy)
-                }
-            }
-        }.scrollContentBackground(.hidden).frame(maxWidth: 680).frame(maxWidth: .infinity).background(Theme.background)
-            .navigationTitle(store.connected ? "Account" : "Connect to Mainbrella").navigationBarTitleDisplayMode(.inline)
-    }
-}

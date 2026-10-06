@@ -1,4 +1,5 @@
 import SwiftUI
+import GoogleSignIn
 
 @MainActor final class AppStore: ObservableObject {
     @Published private(set) var workspaces: [Workspace] = []
@@ -10,6 +11,9 @@ import SwiftUI
     @Published var syncError: String?
     @Published var preview: PreviewSession?
     @Published private(set) var previewBusy = false
+    @Published private(set) var user: AccountUser?
+    @Published private(set) var authenticationBusy = false
+    @Published var authenticationError: String?
     @Published private var token: String
     private let session: URLSession
     private let saveToken: (String) throws -> Void
@@ -32,6 +36,8 @@ import SwiftUI
         self.activity = activity ?? ActivityStream()
     }
     var connected: Bool { !token.isEmpty }
+    var usesAPIKey: Bool { token.hasPrefix("mb_") }
+    private var auth: AuthClient { AuthClient(baseURL: ServiceURLs.api, session: session) }
     var api: APIClient {
         get throws {
             guard connected else { throw APIError.response(401, "") }
@@ -39,7 +45,7 @@ import SwiftUI
         }
     }
     func connect(token: String) async -> Bool {
-        guard !loading else { return false }
+        guard !loading, !authenticationBusy else { return false }
         loading = true
         defer { loading = false }
         do {
@@ -51,6 +57,7 @@ import SwiftUI
             resetLiveSession()
             revision += 1
             self.token = key
+            user = nil; authenticationError = nil
             preview = nil
             workspaces = spaces
             jobs = [:]; grants = [:]; error = nil; syncError = nil; hasLoaded = false
@@ -60,15 +67,83 @@ import SwiftUI
         } catch { self.error = error.localizedDescription; return false }
     }
     func disconnect() {
-        guard !loading, !previewBusy else { return }
+        guard !loading, !previewBusy, !authenticationBusy else { return }
+        clearAccount()
+    }
+    private func clearAccount() {
         do {
             try saveToken("")
             resetLiveSession()
             revision += 1
             token = ""
+            user = nil
             workspaces = []; jobs = [:]; grants = [:]; preview = nil
             error = nil; syncError = nil; hasLoaded = false
         } catch { self.error = error.localizedDescription }
+    }
+    func signInWithEmail(email: String, password: String) async -> Bool {
+        await signIn { try await self.auth.signInWithEmail(email: email, password: password) }
+    }
+    func signInWithGoogle(credential: @escaping () async throws -> String = GoogleLogin.credential) async -> Bool {
+        await signIn { try await self.auth.signInWithGoogle(credential: credential()) }
+    }
+    private func signIn(_ authenticate: () async throws -> AccountSession) async -> Bool {
+        guard !connected, !loading, !authenticationBusy else { return false }
+        authenticationBusy = true; authenticationError = nil
+        defer { authenticationBusy = false }
+        do {
+            let account = try await authenticate()
+            try Task.checkCancellation()
+            do { try saveToken(account.token) }
+            catch {
+                // A session that couldn't be saved must not leave the app signed in.
+                try? await auth.signOut(token: account.token)
+                throw error
+            }
+            resetLiveSession()
+            revision += 1
+            token = account.token; user = account.user
+            error = nil; syncError = nil; hasLoaded = false
+            // Signing in doesn't depend on having a paid plan or a workspace.
+            await refresh()
+            return true
+        } catch is CancellationError { return false }
+        catch {
+            authenticationError = (error as? LocalizedError)?.errorDescription ?? "Could not finish signing you in. Please try again."
+            return false
+        }
+    }
+    func signOut() async -> Bool {
+        guard connected, !loading, !previewBusy, !authenticationBusy else { return false }
+        authenticationBusy = true; authenticationError = nil
+        defer { authenticationBusy = false }
+        do {
+            if !usesAPIKey { try await auth.signOut(token: token) }
+            clearAccount()
+            if !connected { GIDSignIn.sharedInstance.signOut() }
+            return !connected
+        } catch {
+            authenticationError = "Could not sign you out. Check your connection and try again."
+            return false
+        }
+    }
+    func restoreAccount() async {
+        guard connected, !usesAPIKey, !authenticationBusy else { return }
+        let revision = self.revision
+        do {
+            let currentUser = try await auth.currentUser(token: token)
+            guard revision == self.revision, !Task.isCancelled else { return }
+            if let currentUser { user = currentUser }
+            else { expireAccount() }
+        } catch {
+            if revision == self.revision, !Task.isCancelled {
+                syncError = "Could not check your sign-in. Check your connection and try again."
+            }
+        }
+    }
+    private func expireAccount() {
+        clearAccount()
+        authenticationError = "Your session has expired. Sign in again."
     }
     private func resetLiveSession() {
         liveRunID = UUID()
@@ -78,6 +153,7 @@ import SwiftUI
         liveState = .paused
     }
     func followActivity() async {
+        await restoreAccount()
         guard connected else { return }
         liveTask?.cancel()
         let runID = UUID()
@@ -103,6 +179,9 @@ import SwiftUI
             }
             liveTask = task
             await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+            if revision == self.revision, liveState == .authenticationRequired, !Task.isCancelled {
+                await restoreAccount()
+            }
         } catch { if revision == self.revision { syncError = error.localizedDescription } }
     }
     func receiveActivity(_ frame: ActivityFrame) {
@@ -190,6 +269,9 @@ import SwiftUI
                 }
             } catch {
                 guard revision == self.revision, !Task.isCancelled else { return }
+                if case APIError.response(401, _) = error, !usesAPIKey {
+                    expireAccount(); return
+                }
                 syncError = error.localizedDescription
             }
         }
@@ -227,6 +309,7 @@ import SwiftUI
     var body: some Scene {
         WindowGroup {
             RootView().environmentObject(store).preferredColorScheme(.dark).tint(Theme.blue)
+                .onOpenURL { GIDSignIn.sharedInstance.handle($0) }
         }
     }
 }

@@ -14,7 +14,8 @@ enum APIError: LocalizedError {
         switch self {
         case .invalidURL: return "The server returned an invalid preview link. Refresh previews and try again."
         case .response(let status, let code):
-            if status == 401 { return "Your API key is invalid or expired. Update it in Account." }
+            if code == "keychain" { return "Your account couldn't be saved securely on this device. Please try again." }
+            if status == 401 { return "Your sign-in has expired or your API key is invalid. Sign in again in Account." }
             if status == 402 { return "An active plan is required. Manage your plan at mainbrella.com." }
             if code == "preview_reconciliation_required" { return "Preview cleanup is required. Inspect and revoke the outstanding grant before creating another." }
             if code == "execution_not_found" { return "This execution is no longer available. Execution history expires after one hour." }

@@ -36,7 +36,7 @@ private struct ShareView: View {
             Form {
                 if !store.connected {
                     Section {
-                        Text("Connect your account in Mainbrella, then share again.")
+                        Text("Sign in to Mainbrella, then share again.")
                     }
                 } else if store.sent {
                     Section {
