@@ -117,6 +117,7 @@ enum BuildError: LocalizedError {
             case "build_unavailable", "build_model_unpriced": return "Build is temporarily unavailable. Try again shortly."
             case "app_not_found": return "This website is no longer available. Choose another website."
             case "invalid_request": return "Enter a prompt of 1–6,000 characters and try again."
+            case "invalid_build_model", "invalid_build_effort": return "Build model options changed. Reconnect to refresh them, then try again."
             case "storage_funding_required": return "Renew storage funding in Billing to continue building."
             case "build_budget_exceeded": return "The build reached its limit before verification finished. Your source is saved; ask for a smaller change."
             case "build_check_failed": return "The website didn't pass its build check. Ask Build to fix the errors."

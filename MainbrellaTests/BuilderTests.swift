@@ -126,6 +126,77 @@ import XCTest
         store.reset()
         XCTAssertNil(store.selected); XCTAssertTrue(store.apps.isEmpty); XCTAssertEqual(store.draft, "")
     }
+    func testReloadReplacesRemovedModelBeforeRetrying() async throws {
+        let workers = "@cf/test"
+        let codex = "codex/local-model"
+        var currentModel = workers
+        var writes: [(key: String?, body: [String: String])] = []
+        StubProtocol.handler = { request in
+            if request.url?.path == "/build/config" {
+                let config: [String: Any] = [
+                    "available": true, "model": currentModel, "maxApps": 50, "aiBilling": "included",
+                    "models": [["id": currentModel, "name": currentModel, "efforts": ["low"], "defaultEffort": "low"]]
+                ]
+                return (200, try JSONSerialization.data(withJSONObject: config))
+            }
+            if request.httpMethod == "GET" { return (200, Data("{\"apps\":[]}".utf8)) }
+            writes.append((request.value(forHTTPHeaderField: "Idempotency-Key"),
+                           try JSONSerialization.jsonObject(with: Self.body(request)) as! [String: String]))
+            if writes.count == 1 { return (400, Data("{\"error\":\"invalid_build_model\"}".utf8)) }
+            return (202, Self.snapshot(active: true))
+        }
+        let store = BuilderStore()
+        await store.load(client)
+        store.draft = "Make me a website about frogs"
+        currentModel = codex
+        await store.send(client)
+        XCTAssertNotNil(store.error)
+        XCTAssertEqual(store.draft, "Make me a website about frogs")
+        await store.load(client)
+        XCTAssertEqual(store.model, codex)
+        XCTAssertEqual(store.chosenModel?.id, codex)
+        XCTAssertEqual(store.effort, "low")
+        await store.send(client)
+        XCTAssertEqual(writes.count, 2)
+        XCTAssertEqual(writes[1].body, ["prompt": "Make me a website about frogs", "model": codex, "effort": "low"])
+        XCTAssertNotEqual(writes[0].key, writes[1].key)
+        XCTAssertNil(store.error)
+        XCTAssertEqual(store.draft, "")
+    }
+    func testReloadPreservesSupportedSelectionAndReplacesRemovedEffort() async throws {
+        var efforts = ["low", "high"]
+        StubProtocol.handler = { request in
+            if request.url?.path == "/build/config" {
+                let config: [String: Any] = [
+                    "available": true, "model": "default", "maxApps": 50, "aiBilling": "prepaid",
+                    "models": [
+                        ["id": "default", "name": "Default", "efforts": ["low"], "defaultEffort": "low"],
+                        ["id": "selected", "name": "Selected", "efforts": efforts, "defaultEffort": "low"]
+                    ]
+                ]
+                return (200, try JSONSerialization.data(withJSONObject: config))
+            }
+            return (200, Data("{\"apps\":[]}".utf8))
+        }
+        let store = BuilderStore()
+        await store.load(client)
+        store.model = "selected"
+        store.effort = "high"
+        await store.load(client)
+        XCTAssertEqual(store.model, "selected")
+        XCTAssertEqual(store.effort, "high")
+        efforts = ["low"]
+        await store.load(client)
+        XCTAssertEqual(store.model, "selected")
+        XCTAssertEqual(store.effort, "low")
+    }
+    func testRejectedBuildOptionsExplainHowToRecover() {
+        for code in ["invalid_build_model", "invalid_build_effort"] {
+            let message = BuildError.response(400, code).localizedDescription
+            XCTAssertTrue(message.contains("Reconnect"))
+            XCTAssertFalse(message.contains("saved work"))
+        }
+    }
     func testAPIKeyCannotBeUsedAsBuilderSession() {
         let account = AppStore(token: "mb_test", saveToken: { _ in })
         XCTAssertThrowsError(try account.buildAPI)

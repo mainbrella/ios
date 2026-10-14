@@ -48,7 +48,11 @@ import SwiftUI
             let (config, apps) = try await (configuration, websites)
             guard generation == self.generation, !Task.isCancelled else { return }
             self.config = config; self.apps = apps
-            if model.isEmpty { model = config.model; selectModel() }
+            if model.isEmpty || (config.models != nil && chosenModel == nil) {
+                model = config.model; selectModel()
+            } else if let chosenModel, !chosenModel.efforts.contains(effort) {
+                selectModel()
+            }
             // Restore an account's running build so leaving the app never loses it.
             if selected == nil, let running = apps.first(where: \.building) { selected = running }
         } catch {
