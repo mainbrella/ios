@@ -1,0 +1,298 @@
+import SwiftUI
+
+struct BuilderView: View {
+    @EnvironmentObject private var account: AppStore
+    @EnvironmentObject private var builder: BuilderStore
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @StateObject private var speech = PromptSpeech()
+    @State private var speechPrefix = ""
+    @State private var panel = Panel.build
+    @State private var showingWebsites = false
+    @State private var reconnect = UUID()
+    @ScaledMetric(relativeTo: .body) private var composerHeight = 80
+    @FocusState private var promptFocused: Bool
+    private enum Panel: String, CaseIterable { case build = "Build", preview = "Preview" }
+    private struct WatchIdentity: Equatable {
+        let appID: String?
+        let turnID: String?
+        let revision: Int
+        let active: Bool
+        let reconnect: UUID
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let sideBySide = geometry.size.width >= 900
+            VStack(spacing: 0) {
+                if !sideBySide, builder.selected != nil {
+                    Picker("Workspace view", selection: $panel) {
+                        ForEach(Panel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
+                        .accessibilityIdentifier("builder-panels")
+                }
+                if sideBySide, builder.selected != nil {
+                    HStack(spacing: 0) {
+                        conversation.frame(width: min(420, geometry.size.width * 0.42))
+                        Divider()
+                        preview.frame(maxWidth: .infinity)
+                    }
+                } else if panel == .preview, builder.selected != nil {
+                    preview
+                } else { conversation }
+            }
+        }
+        .background(Theme.background)
+        .navigationTitle(builder.selected?.name ?? "Build a website")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { showingWebsites = true } label: { Image(systemName: "folder") }
+                    .accessibilityLabel("Saved websites").accessibilityIdentifier("builder-websites")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    speech.stop(); builder.newWebsite(); panel = .build
+                } label: { Image(systemName: "square.and.pencil") }
+                    .disabled(builder.sending).accessibilityLabel("New website")
+            }
+        }
+        .sheet(isPresented: $showingWebsites) { websites }
+        .task(id: account.revision) {
+            do { await builder.load(try account.buildAPI) }
+            catch { builder.error = error.localizedDescription }
+        }
+        .task(id: WatchIdentity(appID: builder.selected?.id, turnID: builder.selected?.activeTurnId, revision: account.revision, active: scenePhase == .active, reconnect: reconnect)) {
+            guard scenePhase == .active, let id = builder.selected?.id else { return }
+            do { await builder.follow(try account.buildAPI, id: id) }
+            catch { builder.error = error.localizedDescription }
+        }
+        .onChange(of: builder.selected?.latestTurn?.status) { previous, current in
+            if ["queued", "running"].contains(previous ?? ""), current == "succeeded", builder.selected?.previewURL() != nil {
+                promptFocused = false
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { panel = .preview }
+            }
+        }
+        .onChange(of: speech.transcript) { _, text in
+            guard !text.isEmpty else { return }
+            builder.draft = speechPrefix + (speechPrefix.isEmpty ? "" : " ") + text
+        }
+        .onChange(of: builder.busy) { _, busy in if busy { speech.stop() } }
+        .onChange(of: builder.selected?.id) { _, _ in speech.stop() }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { speech.stop() } }
+        .onDisappear { speech.stop() }
+    }
+
+    private var conversation: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    if let running = builder.apps.first(where: { $0.building && $0.id != builder.selected?.id }) {
+                        Button("Open running build: \(running.name)") { builder.open(running); panel = .build }
+                            .font(.subheadline).frame(minHeight: 44)
+                    }
+                    if let app = builder.selected {
+                        if app.turns == nil { ProgressView("Loading build…") }
+                        ForEach(app.turns ?? []) { turn in
+                            turnView(turn)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("What would you like to make?").font(.title2.weight(.semibold))
+                                .accessibilityAddTraits(.isHeader)
+                            Text("Describe your website. Watch it take shape, then try the live preview.")
+                                .font(.body).foregroundStyle(Theme.muted)
+                        }.padding(.top, 24)
+                        Button {
+                            builder.draft = "Make me a website about frogs"; promptFocused = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text("Make me a website about frogs").multilineTextAlignment(.leading)
+                                Spacer(minLength: 4)
+                                Image(systemName: "arrow.up.left").foregroundStyle(Theme.muted)
+                            }.font(.subheadline).padding(.vertical, 12)
+                        }.buttonStyle(.plain).accessibilityIdentifier("builder-example")
+                    }
+                    if builder.loading { ProgressView("Loading websites…") }
+                    if let note = builder.connectionNote {
+                        Label(note, systemImage: "wifi.exclamationmark").font(.footnote).foregroundStyle(Theme.muted)
+                    }
+                    if let error = builder.error {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.orange)
+                            Button("Reconnect") {
+                                reconnect = UUID()
+                                Task { do { await builder.load(try account.buildAPI) } catch { builder.error = error.localizedDescription } }
+                            }.frame(minHeight: 44)
+                        }.accessibilityIdentifier("builder-error")
+                    }
+                    if builder.config?.available == false {
+                        Text("Build is temporarily unavailable. Your saved websites are still here.").font(.subheadline).foregroundStyle(Theme.muted)
+                    }
+                }.padding(20).frame(maxWidth: 640, alignment: .leading).frame(maxWidth: .infinity)
+            }
+            .defaultScrollAnchor(builder.selected == nil ? .top : .bottom)
+            .scrollDismissesKeyboard(.interactively)
+            composer
+        }
+    }
+
+    private func turnView(_ turn: BuildTurn) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if turn.mode == "build" {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("You").font(.caption.weight(.medium)).foregroundStyle(Theme.muted)
+                    Text(turn.prompt).font(.body).textSelection(.enabled)
+                }
+            }
+            HStack(spacing: 10) {
+                if turn.running { ProgressView().controlSize(.small) }
+                else { Image(systemName: turn.status == "succeeded" ? "checkmark.circle" : "exclamationmark.circle").foregroundStyle(turn.status == "succeeded" ? Theme.green : .orange) }
+                Text(turn.running ? (turn.stage.isEmpty ? "Building…" : turn.stage) : turn.status == "succeeded" ? "Preview ready" : "Build needs attention")
+                    .font(.subheadline.weight(.semibold))
+            }.accessibilityIdentifier("build-status-\(turn.id)")
+            ForEach(turn.activity ?? []) { item in
+                if item.type == "message" {
+                    Text(item.text).font(.body).textSelection(.enabled).accessibilityIdentifier("build-message-\(item.id)")
+                } else {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: activitySymbol(item.status)).foregroundStyle(item.status == "succeeded" ? Theme.green : Theme.muted)
+                            .frame(width: 18).accessibilityLabel(item.status.capitalized)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.text).font(.subheadline)
+                            if let explanation = item.explanation, !explanation.isEmpty {
+                                Text(explanation).font(.caption).foregroundStyle(Theme.muted)
+                            }
+                        }
+                    }.accessibilityElement(children: .combine)
+                }
+            }
+            if let summary = turn.summary, !summary.isEmpty,
+               !(turn.activity ?? []).contains(where: { $0.type == "message" && $0.text == summary }) {
+                Text(summary).font(.body).textSelection(.enabled)
+            }
+            if turn.status == "failed" {
+                Text(turn.errorExplanation ?? BuildError.response(0, turn.error ?? "build_failed").localizedDescription)
+                    .font(.subheadline).foregroundStyle(.orange).textSelection(.enabled)
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func activitySymbol(_ status: String) -> String {
+        switch status {
+        case "succeeded": return "checkmark"
+        case "failed", "blocked", "unknown": return "exclamationmark.circle"
+        case "skipped": return "minus"
+        default: return "ellipsis"
+        }
+    }
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let failure = speech.failure { Text(failure).font(.caption).foregroundStyle(.orange) }
+            if builder.draft.count > 6000 {
+                Text("Prompts can contain up to 6,000 characters.").font(.caption).foregroundStyle(.orange)
+            }
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $builder.draft)
+                    .scrollContentBackground(.hidden).font(.body).focused($promptFocused)
+                    .frame(height: min(composerHeight, 160))
+                    .accessibilityLabel("Website prompt").accessibilityIdentifier("builder-prompt")
+                    .disabled(builder.busy)
+                if builder.draft.isEmpty {
+                    Text(builder.selected == nil ? "Describe your website…" : "Ask for a change…")
+                        .foregroundStyle(Theme.muted).padding(.top, 8).padding(.leading, 5)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+            }
+            HStack(spacing: 8) {
+                modelMenu
+                Spacer(minLength: 0)
+                Button {
+                    if speech.isRecording || speech.isStarting { speech.stop() }
+                    else { speechPrefix = builder.draft; Task { await speech.start() } }
+                } label: {
+                    Image(systemName: speech.isRecording ? "stop.circle" : "mic").font(.title3).frame(width: 44, height: 44)
+                }.disabled(builder.busy).accessibilityLabel(speech.isRecording ? "Stop dictation" : "Dictate prompt")
+                Button {
+                    speech.stop(); promptFocused = false
+                    Task { do { await builder.send(try account.buildAPI) } catch { builder.error = error.localizedDescription } }
+                } label: {
+                    HStack(spacing: 6) {
+                        if builder.sending { ProgressView().tint(.white) }
+                        else { Image(systemName: "arrow.up") }
+                        Text(builder.selected == nil ? "Build" : "Send")
+                    }.font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 44)
+                        .foregroundStyle(.white).background(builder.canSend ? Theme.actionBlue : Theme.surface, in: Capsule())
+                }.disabled(!builder.canSend).accessibilityIdentifier("builder-submit")
+            }
+            if builder.selected == nil, builder.config?.aiBilling == "prepaid" {
+                Text("Builds use your prepaid balance.").font(.caption).foregroundStyle(Theme.muted)
+            }
+        }.padding(16).frame(maxWidth: 640).frame(maxWidth: .infinity)
+            .background(Theme.surface)
+    }
+
+    private var modelMenu: some View {
+        Menu {
+            Picker("Model", selection: $builder.model) {
+                ForEach(builder.config?.models ?? []) { Text($0.name).tag($0.id) }
+            }
+            if let model = builder.chosenModel, model.efforts.count > 1 {
+                Picker("Effort", selection: $builder.effort) {
+                    ForEach(model.efforts, id: \.self) { Text($0.capitalized).tag($0) }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(builder.chosenModel?.name ?? "Default model").lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption2)
+            }.font(.caption).foregroundStyle(Theme.muted).frame(minHeight: 44)
+        }.disabled(builder.busy || builder.config?.models?.isEmpty != false)
+            .onChange(of: builder.model) { _, _ in builder.selectModel() }
+            .accessibilityLabel("Build model and effort")
+    }
+
+    private var preview: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            if let app = builder.selected, let url = app.previewURL(at: context.date) {
+                BuilderPreviewView(url: url, revision: app.revision)
+            } else {
+                VStack(spacing: 12) {
+                    if builder.selected?.building == true {
+                        ProgressView()
+                        Text("Your preview will appear when the build is ready.")
+                    } else if (builder.selected?.revision ?? 0) > 0 {
+                        Text("The preview has expired. Your website is saved.")
+                        Button("Start preview") {
+                            Task { do { await builder.send(try account.buildAPI, restartPreview: true) } catch { builder.error = error.localizedDescription } }
+                            panel = .build
+                        }.buttonStyle(ActionStyle()).disabled(builder.busy || builder.config?.available != true)
+                    } else { Text("Your preview will appear after a successful build.") }
+                }.font(.subheadline).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+                    .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var websites: some View {
+        NavigationStack {
+            List {
+                if builder.apps.isEmpty { Text("No saved websites yet.").foregroundStyle(Theme.muted) }
+                ForEach(builder.apps) { app in
+                    Button {
+                        speech.stop(); builder.open(app); panel = .build; showingWebsites = false
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(app.name).font(.headline).foregroundStyle(.primary)
+                            Text(app.prompt).font(.subheadline).foregroundStyle(Theme.muted).lineLimit(2)
+                            Text(app.building ? "Building" : "Revision \(app.revision)").font(.caption).foregroundStyle(Theme.muted)
+                        }.padding(.vertical, 4)
+                    }.disabled(builder.sending)
+                }
+            }.navigationTitle("Websites").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingWebsites = false } } }
+                .refreshable { do { await builder.load(try account.buildAPI) } catch { builder.error = error.localizedDescription } }
+        }
+    }
+}

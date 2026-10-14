@@ -47,7 +47,10 @@ import PencilKit
         webView.stopLoading()
     }
     func load(_ session: PreviewSession) {
-        webView.load(URLRequest(url: session.url))
+        load(session.url)
+    }
+    func load(_ url: URL) {
+        webView.load(URLRequest(url: url))
     }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let value = message.body as? String else { return }
@@ -64,7 +67,12 @@ import PencilKit
     }
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         let scheme = navigationAction.request.url?.scheme
-        decisionHandler(scheme == "https" || scheme == "about" ? .allow : .cancel)
+        var allowed = scheme == "https" || scheme == "about"
+        #if DEBUG
+        let host = navigationAction.request.url?.host ?? ""
+        if scheme == "http", host == "localhost" || host.hasSuffix(".localhost") { allowed = true }
+        #endif
+        decisionHandler(allowed ? .allow : .cancel)
     }
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
         if let response = navigationResponse.response as? HTTPURLResponse, response.statusCode >= 400 {

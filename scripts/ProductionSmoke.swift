@@ -143,7 +143,7 @@ import CoreGraphics
         if CommandLine.arguments.contains("--handoff-only"), let uiDestination {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
-            process.arguments = ["-project", "Mainbrella.xcodeproj", "-scheme", "Mainbrella", "-destination", uiDestination,
+            process.arguments = ["-project", "Mainbrella.xcodeproj", "-scheme", "Mainbrella", "-configuration", "Release", "-destination", uiDestination,
                 "-derivedDataPath", "DerivedData", "-collect-test-diagnostics", "never",
                 "-only-testing:MainbrellaUITests/MainbrellaUITests/testProductionHandoff", "test"]
             process.environment = ProcessInfo.processInfo.environment.merging([
@@ -202,7 +202,7 @@ import CoreGraphics
         if let uiDestination {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
-            process.arguments = ["-project", "Mainbrella.xcodeproj", "-scheme", "Mainbrella", "-destination", uiDestination,
+            process.arguments = ["-project", "Mainbrella.xcodeproj", "-scheme", "Mainbrella", "-configuration", "Release", "-destination", uiDestination,
                 "-derivedDataPath", "DerivedData", "-collect-test-diagnostics", "never",
                 "-only-testing:MainbrellaUITests/MainbrellaUITests/testProductionWorkflow", "test"]
             process.environment = ProcessInfo.processInfo.environment.merging([

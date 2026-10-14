@@ -3,7 +3,11 @@ import Security
 
 enum ServiceURLs {
     static let website = URL(string: "https://mainbrella.com/")!
+    #if DEBUG
+    static let api = URL(string: "http://localhost:8787/")!
+    #else
     static let api = URL(string: "https://api.mainbrella.com/")!
+    #endif
     static let apiKeys = website.appendingPathComponent("api-keys/")
 }
 
@@ -117,7 +121,11 @@ struct APIClient {
 }
 
 enum Keychain {
+    #if DEBUG
+    static let service = "com.mainbrella.ios.debug"
+    #else
     static let service = "com.mainbrella.ios"
+    #endif
     private static var sharedGroup: String? { Bundle.main.object(forInfoDictionaryKey: "MainbrellaKeychainAccessGroup") as? String }
     private static var legacyGroup: String? { Bundle.main.object(forInfoDictionaryKey: "MainbrellaLegacyKeychainAccessGroup") as? String }
 

@@ -3,6 +3,62 @@ import XCTest
 @MainActor final class MainbrellaUITests: XCTestCase {
     override func tearDown() { XCUIDevice.shared.orientation = .portrait }
 
+    func testLocalBuilderPromptStreamingAndPreview() throws {
+        guard ProcessInfo.processInfo.environment["MAINBRELLA_BUILDER_FIXTURE"] == "1" else {
+            throw XCTSkip("Start scripts/builder-fixture.py and opt in with TEST_RUNNER_MAINBRELLA_BUILDER_FIXTURE=1.")
+        }
+        let app = XCUIApplication()
+        app.launch()
+        // The fixture uses normal sign-in; no authentication bypass is built into the app.
+        if app.tabBars.buttons["Account"].exists { app.tabBars.buttons["Account"].tap() }
+        else if app.buttons["Account"].exists { app.buttons["Account"].tap() }
+        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        openSignIn(app)
+        app.textFields["login-email"].tap()
+        app.textFields["login-email"].typeText("builder@example.test")
+        app.secureTextFields["login-password"].tap()
+        app.secureTextFields["login-password"].typeText("fixture-password")
+        app.buttons["email-sign-in"].tap()
+        let prompt = app.descendants(matching: .any).matching(identifier: "builder-prompt").firstMatch
+        XCTAssertTrue(prompt.waitForExistence(timeout: 15))
+        guard prompt.exists else { return }
+        addTeardownBlock {
+            if app.tabBars.buttons["Account"].exists { app.tabBars.buttons["Account"].tap() }
+            else if app.buttons["Account"].exists { app.buttons["Account"].tap() }
+            if app.buttons["Sign out"].waitForExistence(timeout: 5) { app.buttons["Sign out"].tap() }
+        }
+        let empty = XCTAttachment(screenshot: app.screenshot())
+        empty.name = "Native website composer"; empty.lifetime = .keepAlways; add(empty)
+        prompt.tap(); prompt.typeText("Make me a website about frogs")
+        app.buttons["builder-submit"].tap()
+        XCTAssertTrue(app.staticTexts["build-message-thought"].waitForExistence(timeout: 10))
+        let progress = XCTAttachment(screenshot: app.screenshot())
+        progress.name = "Streamed build progress"; progress.lifetime = .keepAlways; add(progress)
+        XCTAssertTrue(app.staticTexts["builder-preview-url"].waitForExistence(timeout: 25))
+        XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.staticTexts["Frog Field Guide"].waitForExistence(timeout: 15))
+        let preview = XCTAttachment(screenshot: app.screenshot())
+        preview.name = "Embedded website preview"; preview.lifetime = .keepAlways; add(preview)
+        app.webViews.buttons["Meet the frogs"].tap()
+        XCTAssertTrue(app.webViews.buttons["Spring peeper, tree frog, bullfrog"].exists)
+        if app.segmentedControls["builder-panels"].exists {
+            app.segmentedControls["builder-panels"].buttons["Build"].tap()
+        }
+        prompt.tap(); prompt.typeText("Add a section about ponds")
+        app.buttons["builder-submit"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "build-status-turn-2").firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["builder-preview-url"].waitForExistence(timeout: 25))
+        XCTAssertTrue(app.webViews.staticTexts["Frog Field Guide"].waitForExistence(timeout: 15))
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            for orientation in [UIDeviceOrientation.landscapeLeft, .portrait] {
+                XCUIDevice.shared.orientation = orientation
+                XCTAssertTrue(app.buttons["builder-websites"].waitForExistence(timeout: 5))
+                let screenshot = XCTAttachment(screenshot: app.screenshot())
+                screenshot.name = "iPad builder \(orientation.rawValue)"; screenshot.lifetime = .keepAlways; add(screenshot)
+            }
+        }
+    }
+
     func testProductionWorkflow() throws {
         guard let key = ProcessInfo.processInfo.environment["MAINBRELLA_UI_TEST_KEY"] else {
             throw XCTSkip("Run scripts/ProductionSmoke.swift with --ui to check the real production workflow.")
@@ -264,7 +320,7 @@ import XCTest
         app.navigationBars.buttons["Welcome"].tap()
         XCTAssertTrue(app.buttons["welcome-get-started"].waitForExistence(timeout: 5))
         app.swipeUp()
-        XCTAssertTrue(app.staticTexts["A home for agents that stay with you."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Your websites and conversations stay saved to your account."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["welcome-get-started"].isHittable)
     }
 

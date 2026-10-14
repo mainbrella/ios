@@ -1,10 +1,10 @@
 import SwiftUI
 
 enum Destination: String, CaseIterable, Identifiable {
-    case console = "Workspace", inbox = "Activity", projects = "Projects", previews = "Previews", account = "Account"
+    case builder = "Build", console = "Workspace", inbox = "Activity", projects = "Projects", account = "Account"
     var id: String { rawValue }
     var symbol: String {
-        switch self { case .console: "terminal"; case .inbox: "tray"; case .projects: "folder"; case .previews: "rectangle.on.rectangle"; case .account: "person.crop.circle" }
+        switch self { case .builder: "hammer"; case .console: "terminal"; case .inbox: "tray"; case .projects: "folder"; case .account: "person.crop.circle" }
     }
 }
 
@@ -13,7 +13,8 @@ struct RootView: View {
     @Environment(\.horizontalSizeClass) private var size
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var destination: Destination = .console
+    @State private var destination: Destination = .builder
+    @StateObject private var builder = BuilderStore()
     @StateObject private var console = ConsoleTabs()
     @State private var showingSplash = true
     @State private var signInRequired = false
@@ -37,7 +38,7 @@ struct RootView: View {
                     } detail: {
                         HStack(spacing: 0) {
                             NavigationStack { content }.frame(maxWidth: .infinity)
-                            if inspector && destination != .account, let preview = store.preview {
+                            if inspector && destination != .account && destination != .builder, let preview = store.preview {
                                 Divider()
                                 PreviewView(session: preview, embedded: true).id(preview.id)
                                     .frame(width: 350).background(Theme.surface)
@@ -54,15 +55,16 @@ struct RootView: View {
             }
             .background(Theme.background)
             .environmentObject(console)
-            .onChange(of: store.revision) { _, _ in console.reset() }
-            .sheet(item: Binding(get: { inspector && destination != .account ? nil : store.preview }, set: { store.preview = $0 })) { preview in
+            .environmentObject(builder)
+            .onChange(of: store.revision) { _, _ in console.reset(); builder.reset() }
+            .sheet(item: Binding(get: { inspector && destination != .account && destination != .builder ? nil : store.preview }, set: { store.preview = $0 })) { preview in
                 NavigationStack { PreviewView(session: preview) }.environmentObject(store)
             }
             .alert("Unable to complete request", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
                 Button("OK") { store.error = nil }
             } message: { Text(store.error ?? "") }
             .onChange(of: store.connected) { wasConnected, connected in
-                destination = .console
+                destination = .builder
                 signInRequired = wasConnected && !connected && store.authenticationError != nil
             }
             .task(id: LiveSessionIdentity(revision: store.revision, active: scenePhase == .active)) {
@@ -85,10 +87,10 @@ struct RootView: View {
     @ViewBuilder private var content: some View { screen(destination) }
     @ViewBuilder private func screen(_ destination: Destination) -> some View {
         switch destination {
+        case .builder: BuilderView()
         case .console: ConsoleView()
         case .inbox: InboxView()
         case .projects: WorkspacesView(previewsOnly: false)
-        case .previews: WorkspacesView(previewsOnly: true)
         case .account: AccountView()
         }
     }

@@ -38,6 +38,12 @@ import GoogleSignIn
     var connected: Bool { !token.isEmpty }
     var usesAPIKey: Bool { token.hasPrefix("mb_") }
     private var auth: AuthClient { AuthClient(baseURL: ServiceURLs.api, session: session) }
+    var buildAPI: BuildClient {
+        get throws {
+            guard connected, !usesAPIKey else { throw BuildError.accountRequired }
+            return BuildClient(baseURL: ServiceURLs.api, token: token, session: session)
+        }
+    }
     var api: APIClient {
         get throws {
             guard connected else { throw APIError.response(401, "") }

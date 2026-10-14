@@ -126,7 +126,7 @@ final class APIClientTests: XCTestCase {
         let workspaceJSON = try JSONEncoder().encode(["containers": [workspace]])
         var paths: [String] = []
         StubProtocol.handler = { request in
-            XCTAssertEqual(request.url?.host, "api.mainbrella.com")
+            XCTAssertEqual(request.url?.host, ServiceURLs.api.host)
             XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer mb_test")
             XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/json")
             let path = request.url!.path

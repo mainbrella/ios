@@ -69,7 +69,9 @@ private final class DeferredActivityProtocol: URLProtocol {
 
     func testWebSocketKeepsCredentialsOutOfURL() throws {
         let request = try client.activityRequest()
-        XCTAssertEqual(request.url?.absoluteString, "wss://api.mainbrella.com/containers/activity")
+        var expected = URLComponents(url: ServiceURLs.api.appendingPathComponent("containers/activity"), resolvingAgainstBaseURL: false)!
+        expected.scheme = ServiceURLs.api.scheme == "http" ? "ws" : "wss"
+        XCTAssertEqual(request.url, expected.url)
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer mb_test")
         XCTAssertNil(request.url?.query)
         XCTAssertNil(request.value(forHTTPHeaderField: "Origin"))
