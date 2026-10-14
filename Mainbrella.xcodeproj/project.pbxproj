@@ -28,13 +28,18 @@
 		6A99E2DA002A7DC94678F2EA /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E828FB9B66A0E9D6D24D6B4 /* AppStore.swift */; };
 		72CD2F27103848435D4821C9 /* WorkspaceAttachmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6128933EE462488D2D26B33 /* WorkspaceAttachmentTests.swift */; };
 		73E6101F700857C632EFB7DD /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C439273406A423783E58FB /* Views.swift */; };
+		764C6E18E91EBA27F46CAAD2 /* ComputeCreditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F27DE72F830290F27501E94B /* ComputeCreditView.swift */; };
 		77184EB7CED1C0FE60AC8097 /* SharePayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112C1E1A46E7D4960CEC3148 /* SharePayload.swift */; };
 		7CDC14C27180D06AA6AEA056 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06C7B97D2DCF907B8748AD22 /* Theme.swift */; };
+		8BE0504F1EA55D2A44ABAAE5 /* BillingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C313811CCFCAE113D064D6C /* BillingClient.swift */; };
 		8C0201F305EC37D3AC7CFDEE /* ShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DB3BADC68BF3A112E1209B7 /* ShareStore.swift */; };
+		9459627085AE0CFB09BD27E2 /* ComputeCreditStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 781B27B434A72E01FC48BAA0 /* ComputeCreditStore.swift */; };
 		95F423E3C613FD0F0A436469 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3BD736C94C3F43D45D03A9F1 /* Assets.xcassets */; };
 		9780C309FAE718FB01A531C5 /* InboxAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA30E9C6C371A02FC7E98C8E /* InboxAttachment.swift */; };
 		A4A90C2988D25B95F9CC3441 /* ConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C14B24806C655833739497A7 /* ConsoleView.swift */; };
 		AB563F27EC13222272226FAB /* BuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50A99DFE5E39BAB2A61DECBA /* BuilderTests.swift */; };
+		B7C3B174250D7E26621751BC /* ComputeCreditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA07016F26E90BD47C39EC6 /* ComputeCreditTests.swift */; };
+		BCE87D9C856F8673DA1F9F27 /* Mainbrella.storekit in Resources */ = {isa = PBXBuildFile; fileRef = CAFF2594A8AC9AC52D7D77DD /* Mainbrella.storekit */; };
 		BFA9ADA80AFD758227BF9F51 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4863230E54FB42F501FE57F8 /* WelcomeView.swift */; };
 		C075D674E0D310E08D4FF6A3 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */; };
 		C352ABD78239009A86173004 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CFC9BB07700683C1A310F6 /* AccountView.swift */; };
@@ -49,11 +54,6 @@
 		DDAB3295CEB33F13A8A93555 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB4ACC46E82DEB6ADDBAC39 /* PreviewView.swift */; };
 		DF0EB591E0B1E1B37BCC2917 /* InboxAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA30E9C6C371A02FC7E98C8E /* InboxAttachment.swift */; };
 		EC5546143E4366C8593DC536 /* BuildClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC74EE23EA0C08354E93558 /* BuildClient.swift */; };
-		8BE0504F1EA55D2A44ABAAE5 /* BillingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C313811CCFCAE113D064D6C /* BillingClient.swift */; };
-		9459627085AE0CFB09BD27E2 /* ComputeCreditStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 781B27B434A72E01FC48BAA0 /* ComputeCreditStore.swift */; };
-		764C6E18E91EBA27F46CAAD2 /* ComputeCreditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F27DE72F830290F27501E94B /* ComputeCreditView.swift */; };
-		B7C3B174250D7E26621751BC /* ComputeCreditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA07016F26E90BD47C39EC6 /* ComputeCreditTests.swift */; };
-		BCE87D9C856F8673DA1F9F27 /* Mainbrella.storekit in Resources */ = {isa = PBXBuildFile; fileRef = CAFF2594A8AC9AC52D7D77DD /* Mainbrella.storekit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -94,12 +94,14 @@
 		57C767515B30B8DFB6B7209A /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		70C439273406A423783E58FB /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		733BE4B9C87701DD6C24D85B /* BuilderPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuilderPreviewView.swift; sourceTree = "<group>"; };
+		781B27B434A72E01FC48BAA0 /* ComputeCreditStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCreditStore.swift; sourceTree = "<group>"; };
 		7EB4ACC46E82DEB6ADDBAC39 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
 		82CFC9BB07700683C1A310F6 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
+		8C313811CCFCAE113D064D6C /* BillingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingClient.swift; sourceTree = "<group>"; };
 		8DB3BADC68BF3A112E1209B7 /* ShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareStore.swift; sourceTree = "<group>"; };
 		9149E6717DBA6C96D4C69020 /* PromptSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptSpeech.swift; sourceTree = "<group>"; };
 		92F95E06FE1753978E4A5FF4 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
-		9AC5F495BA6E19342E8F9BFD /* Mainbrella.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Mainbrella.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9AC5F495BA6E19342E8F9BFD /* Mainbrella.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mainbrella.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A5ECE1411DE922EF20CC3968 /* ConsoleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleTests.swift; sourceTree = "<group>"; };
 		B29D75F521567591FF80E96E /* MainbrellaShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MainbrellaShare.entitlements; sourceTree = "<group>"; };
 		B4E80997B0267F5698CBBB61 /* MainbrellaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainbrellaUITests.swift; sourceTree = "<group>"; };
@@ -108,16 +110,14 @@
 		C6128933EE462488D2D26B33 /* WorkspaceAttachmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAttachmentTests.swift; sourceTree = "<group>"; };
 		C7695579679A633F115925B4 /* AuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthClient.swift; sourceTree = "<group>"; };
 		CA30E9C6C371A02FC7E98C8E /* InboxAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxAttachment.swift; sourceTree = "<group>"; };
+		CAFF2594A8AC9AC52D7D77DD /* Mainbrella.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Mainbrella.storekit; sourceTree = "<group>"; };
 		DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleLogin.swift; sourceTree = "<group>"; };
 		E9C18E1CF344A0BFCB04856C /* ShareTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareTests.swift; sourceTree = "<group>"; };
+		EAA07016F26E90BD47C39EC6 /* ComputeCreditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCreditTests.swift; sourceTree = "<group>"; };
 		EB72B007AD246864F3F204A9 /* BuilderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuilderStore.swift; sourceTree = "<group>"; };
+		F27DE72F830290F27501E94B /* ComputeCreditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCreditView.swift; sourceTree = "<group>"; };
 		FCA9FAAB713EBF3FA1D8FA2B /* MainbrellaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MainbrellaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FD165057FECFFCACB7CFD1B9 /* WorkspaceTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTools.swift; sourceTree = "<group>"; };
-		8C313811CCFCAE113D064D6C /* BillingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingClient.swift; sourceTree = "<group>"; };
-		781B27B434A72E01FC48BAA0 /* ComputeCreditStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCreditStore.swift; sourceTree = "<group>"; };
-		F27DE72F830290F27501E94B /* ComputeCreditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCreditView.swift; sourceTree = "<group>"; };
-		EAA07016F26E90BD47C39EC6 /* ComputeCreditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCreditTests.swift; sourceTree = "<group>"; };
-		CAFF2594A8AC9AC52D7D77DD /* Mainbrella.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Mainbrella.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -312,9 +312,6 @@
 					21E51EE3637E191C94B96ACA = {
 						DevelopmentTeam = "";
 					};
-					49A83DE100E35DEDAC0B3842 = {
-						DevelopmentTeam = "";
-					};
 					BD731EFD6A6FF0A02CDAA2F5 = {
 						DevelopmentTeam = "";
 					};
@@ -507,6 +504,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Mainbrella/Mainbrella.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 755R3VBZ84;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mainbrella/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -544,6 +542,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Mainbrella/Mainbrella.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 755R3VBZ84;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mainbrella/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
