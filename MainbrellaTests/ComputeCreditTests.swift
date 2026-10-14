@@ -6,10 +6,12 @@ import StoreKitTest
 @MainActor private final class TestComputeStorefront: ComputeStorefront {
     let accountToken = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
     var result = ComputePurchaseResult.cancelled
+    var loadError: Error?
     var pending: [ComputeTransaction] = []
     var onPurchase: (() async -> Void)?
     func loadProduct() async throws -> ComputeProduct {
-        ComputeProduct(displayPrice: "$4.99", priceMilliunits: 4990, currency: "USD", storefront: "USA")
+        if let loadError { throw loadError }
+        return ComputeProduct(displayPrice: "$4.99", priceMilliunits: 4990, currency: "USD", storefront: "USA")
     }
     func purchase(accountToken: UUID) async throws -> ComputePurchaseResult {
         XCTAssertEqual(accountToken, self.accountToken)
@@ -83,6 +85,46 @@ import StoreKitTest
         XCTAssertEqual(store.balance?.availableBalanceCents, 349)
         XCTAssertNil(store.error)
         XCTAssertFalse(store.busy)
+    }
+    func testConfigurationFailureDoesNotInvalidateExistingOrZeroBalance() async {
+        let original = StubProtocol.handler!
+        for cents in [492, 0] {
+            for status in [404, 503] {
+                StubProtocol.handler = { request in
+                    switch request.url!.path {
+                    case "/billing/balance":
+                        return (200, Data("{\"balance\":{\"balanceCents\":\(cents),\"availableBalanceCents\":\(cents),\"currency\":\"usd\"}}".utf8))
+                    case "/billing/apple/config":
+                        return (status, Data("{\"error\":\"apple_billing_unavailable\"}".utf8))
+                    default: return try original(request)
+                    }
+                }
+                let store = ComputeCreditStore(storefront: shop)
+                await store.run(client)
+                XCTAssertEqual(store.balance?.availableBalanceCents, cents)
+                XCTAssertNil(store.error)
+                XCTAssertEqual(store.availabilityError, CreditError.unavailable.localizedDescription)
+                XCTAssertFalse(store.canPurchase)
+                XCTAssertEqual(writes, 0)
+
+                StubProtocol.handler = original
+                await store.refresh()
+                XCTAssertNil(store.availabilityError)
+                XCTAssertTrue(store.canPurchase)
+            }
+        }
+    }
+    func testStoreKitOutageKeepsBalanceAndDoesNotReportFailedPurchase() async {
+        shop.loadError = CreditError.unavailable
+        let store = ComputeCreditStore(storefront: shop)
+        await store.run(client)
+        XCTAssertEqual(store.balance?.availableBalanceCents, 0)
+        XCTAssertNil(store.error)
+        XCTAssertNotNil(store.availabilityError)
+        XCTAssertEqual(writes, 0)
+        store.reset()
+        XCTAssertNil(store.availabilityError)
+        XCTAssertNil(store.balance)
     }
     func testLostDeliveryRemainsUnfinishedAndRetriesSameTransaction() async {
         let store = ComputeCreditStore(storefront: shop)

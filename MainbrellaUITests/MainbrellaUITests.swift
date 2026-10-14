@@ -3,6 +3,54 @@ import XCTest
 @MainActor final class MainbrellaUITests: XCTestCase {
     override func tearDown() { XCUIDevice.shared.orientation = .portrait }
 
+    func testLocalComputeFundingForExistingAndZeroBalance() throws {
+        guard ProcessInfo.processInfo.environment["MAINBRELLA_BUILDER_FIXTURE"] == "1" else {
+            throw XCTSkip("Start scripts/builder-fixture.py and opt in with TEST_RUNNER_MAINBRELLA_BUILDER_FIXTURE=1.")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MAINBRELLA_BUILDER_FIXTURE_PORT"] = ProcessInfo.processInfo.environment["MAINBRELLA_BUILDER_FIXTURE_PORT"]
+        app.launch()
+        if app.buttons["builder-account"].exists { app.buttons["builder-account"].tap() }
+        if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
+        addTeardownBlock {
+            app.terminate(); app.launch()
+            if app.buttons["builder-account"].waitForExistence(timeout: 5) {
+                app.buttons["builder-account"].tap()
+                if app.buttons["Sign out"].waitForExistence(timeout: 5) { app.buttons["Sign out"].tap() }
+            }
+        }
+        for (email, balance) in [("builder@example.test", "$4.92"), ("zero@example.test", "$0.00")] {
+            openSignIn(app)
+            app.textFields["login-email"].tap()
+            app.textFields["login-email"].typeText(email)
+            app.secureTextFields["login-password"].tap()
+            app.secureTextFields["login-password"].typeText("fixture-password")
+            app.buttons["email-sign-in"].tap()
+            XCTAssertTrue(app.buttons["add-compute-funds"].waitForExistence(timeout: 15))
+            XCTAssertTrue(app.staticTexts[balance].waitForExistence(timeout: 10))
+            XCTAssertFalse(app.staticTexts["compute-purchase-error"].exists)
+            XCTAssertFalse(app.staticTexts["compute-availability-error"].exists)
+            XCTAssertFalse(app.buttons["check-compute-purchases"].exists)
+            if balance == "$0.00" {
+                XCTAssertEqual(app.staticTexts["compute-funding-required"].label, "Add at least $4.99 to get started.")
+            } else {
+                XCTAssertFalse(app.staticTexts["compute-funding-required"].exists)
+            }
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Compute funding \(balance)"; screenshot.lifetime = .keepAlways; add(screenshot)
+            app.buttons["add-compute-funds"].tap()
+            XCTAssertTrue(app.navigationBars["Add funds"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["check-compute-purchases"].waitForExistence(timeout: 15))
+            let funding = XCTAttachment(screenshot: app.screenshot())
+            funding.name = "Add funds options \(balance)"; funding.lifetime = .keepAlways; add(funding)
+            app.buttons["Done"].tap()
+            app.buttons["builder-account"].tap()
+            XCTAssertTrue(app.buttons["add-compute-funds"].waitForExistence(timeout: 5))
+            app.buttons["Sign out"].tap()
+            XCTAssertTrue(app.buttons["welcome-get-started"].waitForExistence(timeout: 10))
+        }
+    }
+
     func testLocalBuilderPromptStreamingAndPreview() throws {
         guard ProcessInfo.processInfo.environment["MAINBRELLA_BUILDER_FIXTURE"] == "1" else {
             throw XCTSkip("Start scripts/builder-fixture.py and opt in with TEST_RUNNER_MAINBRELLA_BUILDER_FIXTURE=1.")

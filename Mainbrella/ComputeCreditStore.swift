@@ -75,6 +75,7 @@ enum ComputePurchaseResult { case purchased(ComputeTransaction), pending, cancel
     @Published private(set) var loading = false
     @Published private(set) var purchasing = false
     @Published private(set) var checking = false
+    @Published private(set) var availabilityError: String?
     @Published private(set) var error: String?
     @Published private(set) var message: String?
     private let storefront: ComputeStorefront
@@ -87,7 +88,8 @@ enum ComputePurchaseResult { case purchased(ComputeTransaction), pending, cancel
     init(storefront: ComputeStorefront? = nil) { self.storefront = storefront ?? StoreKitComputeStorefront() }
     func reset() {
         generation = UUID(); client = nil; product = nil; quote = nil; balance = nil
-        loading = false; purchasing = false; checking = false; deliveries = []; error = nil; message = nil
+        loading = false; purchasing = false; checking = false; deliveries = []
+        availabilityError = nil; error = nil; message = nil
     }
     func run(_ client: BillingClient) async {
         reset(); self.client = client
@@ -115,17 +117,26 @@ enum ComputePurchaseResult { case purchased(ComputeTransaction), pending, cancel
             let balance = try await client.balance()
             guard generation == self.generation, !Task.isCancelled else { return }
             self.balance = balance
-        } catch { /* The purchase configuration below supplies actionable feedback. */ }
+        } catch { /* Keep the last known balance when a refresh is unavailable. */ }
         do {
             let product = try await storefront.loadProduct()
             let quote = try await client.quote(product)
             guard generation == self.generation, !Task.isCancelled else { return }
-            self.product = product; self.quote = quote; error = nil
+            self.product = product; self.quote = quote; availabilityError = nil
             await checkPurchases()
         } catch {
             guard generation == self.generation, !Task.isCancelled else { return }
             product = nil; quote = nil
-            self.error = (error as? CreditError)?.localizedDescription ?? CreditError.unavailable.localizedDescription
+            // Configuration failures are not failed purchases. Only show them
+            // in the funding flow, without suggesting existing credit is invalid.
+            switch error {
+            case CreditError.response(401, _):
+                availabilityError = "Sign in again in Account to add funds."
+            case CreditError.response(_, "apple_price_unavailable"):
+                availabilityError = error.localizedDescription
+            default:
+                availabilityError = CreditError.unavailable.localizedDescription
+            }
         }
     }
     func purchase() async {

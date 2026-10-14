@@ -14,7 +14,7 @@ APP_ID = '11111111-1111-4111-8111-111111111111'
 PREVIEW_HOST = 'a' * 48 + '.localhost'
 PORT = 8787
 USER = {'id': 'ios-builder-fixture', 'email': 'builder@example.test', 'name': 'Builder QA'}
-STATE = {'app': None, 'started': 0, 'keys': {}}
+STATE = {'app': None, 'started': 0, 'keys': {}, 'balanceCents': 492}
 LOCK = threading.Lock()
 
 
@@ -59,6 +59,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({'observability': {'activityWebSocket': False}})
         if self.path == '/containers':
             return self.send_json({'containers': []})
+        if self.path == '/billing/balance':
+            with LOCK:
+                cents = STATE['balanceCents']
+            return self.send_json({'balance': {'balanceCents': cents, 'availableBalanceCents': cents, 'currency': 'usd'}})
+        if self.path == '/billing/apple/config':
+            return self.send_json({'productId': 'MAINBRELLA_FIVE', 'appAccountToken': APP_ID, 'creditCents': 349, 'currency': 'usd'})
         if self.path == '/build/config':
             return self.send_json({'available': True, 'model': '@cf/fixture', 'models': [{'id': '@cf/fixture', 'name': 'Cloudflare model', 'efforts': ['low', 'high'], 'defaultEffort': 'low'}], 'maxApps': 50, 'aiBilling': 'prepaid'})
         if self.path == '/build/apps':
@@ -98,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(raw) if raw else {}
         if self.path == '/auth/email':
             with LOCK:
-                STATE.update(app=None, started=0, keys={})
+                STATE.update(app=None, started=0, keys={}, balanceCents=0 if body.get('email') == 'zero@example.test' else 492)
             return self.send_json({'user': USER}, headers={'Set-Cookie': 'mainbrella_session=' + 'a' * 64 + '; Path=/; HttpOnly; Secure; Max-Age=2592000'})
         if self.path == '/auth/logout':
             return self.send_json({'ok': True})
