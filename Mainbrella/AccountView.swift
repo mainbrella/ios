@@ -5,39 +5,34 @@ struct AccountView: View {
     @EnvironmentObject private var store: AppStore
     @State private var email = ""
     @State private var password = ""
-    @State private var token = ""
-    @State private var showAPIKey = false
     @FocusState private var focusedField: Field?
     private enum Field { case email, password }
 
     var body: some View {
         Form {
-            if store.connected {
+            if store.usesAPIKey {
+                Section {
+                    Text("Building websites requires a Google or email account.")
+                    Button("Remove saved key", role: .destructive) { store.disconnect() }
+                } footer: {
+                    Text("Remove the API key saved by an earlier version, then sign in to build.")
+                }
+            } else if store.connected {
                 Section {
                     if let user = store.user {
                         if !user.name.isEmpty { LabeledContent("Name", value: user.name) }
                         if let email = user.email { LabeledContent("Email", value: email) }
                     } else {
-                        LabeledContent("Status", value: store.usesAPIKey ? "Connected with API key" : "Signed in")
+                        LabeledContent("Status", value: "Signed in")
                     }
-                    LabeledContent("Live updates", value: store.liveState.rawValue)
-                    Link("Manage account and plan", destination: ServiceURLs.website.appendingPathComponent("dashboard/"))
-                }
-                Section {
-                    Label("Share to Mainbrella", systemImage: "square.and.arrow.up")
-                    Text("In Safari, Photos, or another app, share a link, text, or one image to a running workspace.")
-                        .font(.subheadline).foregroundStyle(Theme.muted)
+                    Link("Manage billing", destination: ServiceURLs.website.appendingPathComponent("dashboard/"))
                 }
                 Section {
                     if let message = store.authenticationError { errorMessage(message) }
-                    if store.usesAPIKey {
-                        Button("Remove saved key", role: .destructive) { store.disconnect() }
-                    } else {
-                        Button(store.authenticationBusy ? "Signing out…" : "Sign out") {
-                            Task { await store.signOut() }
-                        }
+                    Button(store.authenticationBusy ? "Signing out…" : "Sign out") {
+                        Task { await store.signOut() }
                     }
-                }.disabled(store.loading || store.previewBusy || store.authenticationBusy)
+                }.disabled(store.authenticationBusy)
             } else {
                 Section {
                     GoogleSignInButton(scheme: .dark, style: .wide, state: .normal) {
@@ -77,24 +72,12 @@ struct AccountView: View {
                         if let message = store.authenticationError { errorMessage(message) }
                     }
                 }
-                Section {
-                    DisclosureGroup("Use an API key", isExpanded: $showAPIKey) {
-                        SecureField("Paste your API key", text: $token)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                            .accessibilityLabel("API key")
-                        Button(store.loading ? "Connecting…" : "Connect") {
-                            Task { if await store.connect(token: token) { token = "" } }
-                        }.disabled(store.loading || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        Link("Create an API key", destination: ServiceURLs.apiKeys)
-                    }
-                }
-                .foregroundStyle(Theme.muted)
             }
         }
         .disabled(store.authenticationBusy || (!store.connected && store.loading))
         .scrollContentBackground(.hidden).scrollDismissesKeyboard(.interactively)
         .frame(maxWidth: 680).frame(maxWidth: .infinity).background(Theme.background)
-        .navigationTitle(store.connected ? "Account" : "Sign in to Mainbrella")
+        .navigationTitle(store.usesAPIKey ? "Sign in to build" : store.connected ? "Account" : "Sign in to Mainbrella")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
     }

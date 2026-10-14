@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Local, deterministic builder fixture for opt-in simulator UI tests.
 
-Run only when the real backend is stopped: python3 scripts/builder-fixture.py
+Run on a free port: python3 scripts/builder-fixture.py --port 8790
 No inference, cloud machines, or outbound network requests are made.
 """
+import argparse
 import json
 import threading
 import time
@@ -11,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 APP_ID = '11111111-1111-4111-8111-111111111111'
 PREVIEW_HOST = 'a' * 48 + '.localhost'
+PORT = 8787
 USER = {'id': 'ios-builder-fixture', 'email': 'builder@example.test', 'name': 'Builder QA'}
 STATE = {'app': None, 'started': 0, 'keys': {}}
 LOCK = threading.Lock()
@@ -32,7 +34,7 @@ def app_snapshot():
     if finished:
         turn['summary'] = 'Your frog website is ready. Try the preview, then tell me what to change.'
         app['activeTurnId'] = None
-        app['preview'] = {'id': 'preview-' + str(app['revision']), 'url': f'http://{PREVIEW_HOST}:8787/preview/', 'expiresAt': (time.time() + 900) * 1000}
+        app['preview'] = {'id': 'preview-' + str(app['revision']), 'url': f'http://{PREVIEW_HOST}:{PORT}/preview/', 'expiresAt': (time.time() + 900) * 1000}
     return app
 
 
@@ -120,5 +122,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    print('Builder fixture listening at http://localhost:8787', flush=True)
-    ThreadingHTTPServer(('127.0.0.1', 8787), Handler).serve_forever()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--port', type=int, default=8787)
+    PORT = parser.parse_args().port
+    if not 1024 <= PORT <= 65535:
+        parser.error('--port must be between 1024 and 65535')
+    print(f'Builder fixture listening at http://localhost:{PORT}', flush=True)
+    ThreadingHTTPServer(('127.0.0.1', PORT), Handler).serve_forever()

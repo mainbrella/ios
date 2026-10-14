@@ -103,7 +103,7 @@ enum BuildError: LocalizedError {
     case accountRequired, invalidProgress, response(Int, String)
     var errorDescription: String? {
         switch self {
-        case .accountRequired: return "Sign in with Google or email in Account to build websites. API keys only connect to workspaces."
+        case .accountRequired: return "Sign in with Google or email to build websites."
         case .invalidProgress: return "Build progress couldn't be read. Reconnect to see the latest progress."
         case .response(let status, let code):
             if status == 401 { return "Your sign-in expired. Sign in again in Account." }

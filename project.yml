@@ -24,8 +24,7 @@ targets:
       - path: Mainbrella
         excludes: [Info.plist]
     dependencies:
-      - target: MainbrellaShare
-        embed: true
+      # Workspace sharing is preserved as a separate target, but hidden for now.
       - package: GoogleSignIn
         product: GoogleSignIn
       - package: GoogleSignIn

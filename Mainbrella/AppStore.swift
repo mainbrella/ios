@@ -110,8 +110,7 @@ import GoogleSignIn
             revision += 1
             token = account.token; user = account.user
             error = nil; syncError = nil; hasLoaded = false
-            // Signing in doesn't depend on having a paid plan or a workspace.
-            await refresh()
+            // BuilderView loads build availability and saved websites after sign-in.
             return true
         } catch is CancellationError { return false }
         catch {

@@ -86,14 +86,11 @@ import XCTest
         }
     }
 
-    func testSignInSucceedsBeforeAccountHasAPlan() async {
+    func testSignInDoesNotLoadWorkspaceFeaturesOrRequireAPlan() async {
         var saved: [String] = []
         StubProtocol.handler = { request in
             switch request.url!.path {
             case "/auth/email": return (200, Data(self.userJSON.utf8))
-            case "/containers":
-                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer \(self.token)")
-                return (402, Data(#"{"error":"subscription_required"}"#.utf8))
             default: XCTFail("Unexpected endpoint"); return (404, Data())
             }
         }
@@ -103,7 +100,7 @@ import XCTest
         XCTAssertTrue(store.connected)
         XCTAssertEqual(store.user?.id, "account")
         XCTAssertEqual(saved, [token])
-        XCTAssertNotNil(store.syncError)
+        XCTAssertNil(store.syncError)
         XCTAssertNil(store.authenticationError)
     }
 

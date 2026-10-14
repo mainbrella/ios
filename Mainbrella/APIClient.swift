@@ -4,7 +4,12 @@ import Security
 enum ServiceURLs {
     static let website = URL(string: "https://mainbrella.com/")!
     #if DEBUG
-    static let api = URL(string: "http://localhost:8787/")!
+    // Opt-in local UI fixtures can run alongside the development backend.
+    static let api: URL = {
+        let value = ProcessInfo.processInfo.environment["MAINBRELLA_BUILDER_FIXTURE_PORT"] ?? "8787"
+        let port = Int(value).flatMap { (1024...65535).contains($0) ? $0 : nil } ?? 8787
+        return URL(string: "http://localhost:\(port)/")!
+    }()
     #else
     static let api = URL(string: "https://api.mainbrella.com/")!
     #endif

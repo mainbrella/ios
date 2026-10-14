@@ -22,6 +22,7 @@ import CoreGraphics
         }
     }
     static func run() async throws {
+        try require(!CommandLine.arguments.contains("--ui"), "Workspace UI is temporarily hidden. Run without --ui for API checks; use the local builder fixture for iOS UI checks.")
         let uiDestination = CommandLine.arguments.contains("--ui") ? try simulatorDestination() : nil
         try require(!CommandLine.arguments.contains("--handoff-only") || uiDestination != nil, "--handoff-only requires --ui")
         let envFile = CommandLine.arguments.dropFirst().first(where: { !$0.hasPrefix("--") }) ?? "../backend/.env"

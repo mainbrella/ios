@@ -8,10 +8,10 @@ import XCTest
             throw XCTSkip("Start scripts/builder-fixture.py and opt in with TEST_RUNNER_MAINBRELLA_BUILDER_FIXTURE=1.")
         }
         let app = XCUIApplication()
+        app.launchEnvironment["MAINBRELLA_BUILDER_FIXTURE_PORT"] = ProcessInfo.processInfo.environment["MAINBRELLA_BUILDER_FIXTURE_PORT"]
         app.launch()
         // The fixture uses normal sign-in; no authentication bypass is built into the app.
-        if app.tabBars.buttons["Account"].exists { app.tabBars.buttons["Account"].tap() }
-        else if app.buttons["Account"].exists { app.buttons["Account"].tap() }
+        if app.buttons["builder-account"].exists { app.buttons["builder-account"].tap() }
         if app.buttons["Sign out"].exists { app.buttons["Sign out"].tap() }
         openSignIn(app)
         app.textFields["login-email"].tap()
@@ -23,13 +23,31 @@ import XCTest
         XCTAssertTrue(prompt.waitForExistence(timeout: 15))
         guard prompt.exists else { return }
         addTeardownBlock {
-            if app.tabBars.buttons["Account"].exists { app.tabBars.buttons["Account"].tap() }
-            else if app.buttons["Account"].exists { app.buttons["Account"].tap() }
-            if app.buttons["Sign out"].waitForExistence(timeout: 5) { app.buttons["Sign out"].tap() }
+            if app.buttons["builder-account"].exists {
+                app.buttons["builder-account"].tap()
+                if app.buttons["Sign out"].waitForExistence(timeout: 5) { app.buttons["Sign out"].tap() }
+            }
         }
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
+        XCTAssertFalse(app.buttons["Workspace"].exists)
+        XCTAssertFalse(app.buttons["Activity"].exists)
+        XCTAssertFalse(app.buttons["Projects"].exists)
+        XCTAssertTrue(app.buttons["builder-submit"].isHittable)
+        XCTAssertEqual(app.buttons["builder-submit"].label, "Build website")
+        XCTAssertFalse(app.buttons["builder-new-website"].exists)
+        app.buttons["builder-websites"].tap()
+        XCTAssertTrue(app.staticTexts["No saved websites yet."].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
         let empty = XCTAttachment(screenshot: app.screenshot())
         empty.name = "Native website composer"; empty.lifetime = .keepAlways; add(empty)
         prompt.tap(); prompt.typeText("Make me a website about frogs")
+        app.buttons["builder-account"].tap()
+        XCTAssertTrue(app.buttons["Sign out"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.links["Manage billing"].exists)
+        XCTAssertFalse(app.staticTexts["Share to Mainbrella"].exists)
+        XCTAssertFalse(app.staticTexts["Live updates"].exists)
+        app.buttons["Done"].tap()
+        XCTAssertEqual(prompt.value as? String, "Make me a website about frogs")
         app.buttons["builder-submit"].tap()
         XCTAssertTrue(app.staticTexts["build-message-thought"].waitForExistence(timeout: 10))
         let progress = XCTAttachment(screenshot: app.screenshot())
@@ -57,9 +75,24 @@ import XCTest
                 screenshot.name = "iPad builder \(orientation.rawValue)"; screenshot.lifetime = .keepAlways; add(screenshot)
             }
         }
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["builder-websites"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
+        app.buttons["builder-websites"].tap()
+        let website = app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "Frog Field Guide")).firstMatch
+        XCTAssertTrue(website.waitForExistence(timeout: 10))
+        website.tap()
+        XCTAssertTrue(app.buttons["builder-new-website"].waitForExistence(timeout: 5))
+        app.buttons["builder-new-website"].tap()
+        XCTAssertTrue(app.staticTexts["What would you like to build?"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["builder-submit"].isEnabled)
+        app.buttons["builder-account"].tap()
+        app.buttons["Sign out"].tap()
+        XCTAssertTrue(app.buttons["welcome-get-started"].waitForExistence(timeout: 10))
     }
 
     func testProductionWorkflow() throws {
+        try XCTSkipIf(true, "Workspace UI and sharing are temporarily hidden. Use the builder fixture for iOS UI checks.")
         guard let key = ProcessInfo.processInfo.environment["MAINBRELLA_UI_TEST_KEY"] else {
             throw XCTSkip("Run scripts/ProductionSmoke.swift with --ui to check the real production workflow.")
         }
@@ -205,6 +238,7 @@ import XCTest
     }
 
     func testProductionHandoff() throws {
+        try XCTSkipIf(true, "Workspace UI is temporarily hidden. Handoff transport is covered by unit tests.")
         guard let key = ProcessInfo.processInfo.environment["MAINBRELLA_UI_TEST_KEY"],
               let workspaceID = ProcessInfo.processInfo.environment["MAINBRELLA_UI_TEST_WORKSPACE_ID"] else {
             throw XCTSkip("Explicit production credentials and a test-owned workspace are required.")
@@ -349,6 +383,7 @@ import XCTest
         XCTAssertTrue(app.textFields["login-email"].exists)
         XCTAssertTrue(app.secureTextFields["login-password"].exists)
         XCTAssertFalse(app.secureTextFields["API key"].exists)
+        XCTAssertFalse(app.buttons["Use an API key"].exists)
         XCTAssertFalse(app.buttons["email-sign-in"].isEnabled)
         XCTAssertFalse(app.tabBars.firstMatch.exists)
         XCTAssertFalse(app.buttons["Open preview"].exists)
@@ -364,17 +399,14 @@ import XCTest
         add(screenshot)
     }
 
-    func testOptionalAPIKeyConnection() throws {
+    func testWorkspaceConnectionIsHidden() throws {
         let app = XCUIApplication()
         app.launch()
         openSignIn(app)
-        XCTAssertTrue(app.buttons["Use an API key"].waitForExistence(timeout: 10))
-        app.buttons["Use an API key"].tap()
-        XCTAssertTrue(app.secureTextFields["API key"].exists)
-        XCTAssertFalse(app.buttons["Connect"].isEnabled)
-        app.secureTextFields["API key"].tap()
-        app.secureTextFields["API key"].typeText("   ")
-        XCTAssertFalse(app.buttons["Connect"].isEnabled)
+        XCTAssertTrue(app.buttons["google-sign-in"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Use an API key"].exists)
+        XCTAssertFalse(app.secureTextFields["API key"].exists)
+        XCTAssertFalse(app.buttons["Connect"].exists)
     }
 
     func testGoogleSignInPresentationAndCancellation() throws {

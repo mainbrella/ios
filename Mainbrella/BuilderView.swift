@@ -9,6 +9,7 @@ struct BuilderView: View {
     @State private var speechPrefix = ""
     @State private var panel = Panel.build
     @State private var showingWebsites = false
+    @State private var showingAccount = false
     @State private var reconnect = UUID()
     @ScaledMetric(relativeTo: .body) private var composerHeight = 80
     @FocusState private var promptFocused: Bool
@@ -26,7 +27,7 @@ struct BuilderView: View {
             let sideBySide = geometry.size.width >= 900
             VStack(spacing: 0) {
                 if !sideBySide, builder.selected != nil {
-                    Picker("Workspace view", selection: $panel) {
+                    Picker("Build view", selection: $panel) {
                         ForEach(Panel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                     }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
                         .accessibilityIdentifier("builder-panels")
@@ -43,21 +44,34 @@ struct BuilderView: View {
             }
         }
         .background(Theme.background)
-        .navigationTitle(builder.selected?.name ?? "Build a website")
+        .navigationTitle(builder.selected?.name ?? "Mainbrella")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { showingWebsites = true } label: { Image(systemName: "folder") }
+                Button { speech.stop(); showingWebsites = true } label: { Image(systemName: "folder").frame(width: 44, height: 44) }
                     .accessibilityLabel("Saved websites").accessibilityIdentifier("builder-websites")
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    speech.stop(); builder.newWebsite(); panel = .build
-                } label: { Image(systemName: "square.and.pencil") }
-                    .disabled(builder.sending).accessibilityLabel("New website")
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if builder.selected != nil {
+                    Button {
+                        speech.stop(); builder.newWebsite(); panel = .build
+                    } label: { Image(systemName: "square.and.pencil").frame(width: 44, height: 44) }
+                        .disabled(builder.sending).accessibilityLabel("New website")
+                        .accessibilityIdentifier("builder-new-website")
+                }
+                Button { speech.stop(); showingAccount = true } label: {
+                    Image(systemName: "person.crop.circle").frame(width: 44, height: 44)
+                }.accessibilityLabel("Account").accessibilityIdentifier("builder-account")
             }
         }
         .sheet(isPresented: $showingWebsites) { websites }
+        .sheet(isPresented: $showingAccount) {
+            NavigationStack {
+                AccountView().toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { showingAccount = false } }
+                }
+            }
+        }
         .task(id: account.revision) {
             do { await builder.load(try account.buildAPI) }
             catch { builder.error = error.localizedDescription }
@@ -98,20 +112,12 @@ struct BuilderView: View {
                         }
                     } else {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("What would you like to make?").font(.title2.weight(.semibold))
+                            Text("What would you like to build?").font(.title2.weight(.semibold))
                                 .accessibilityAddTraits(.isHeader)
-                            Text("Describe your website. Watch it take shape, then try the live preview.")
+                            Text("Describe a website, then preview it and ask for changes.")
                                 .font(.body).foregroundStyle(Theme.muted)
-                        }.padding(.top, 24)
-                        Button {
-                            builder.draft = "Make me a website about frogs"; promptFocused = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                Text("Make me a website about frogs").multilineTextAlignment(.leading)
-                                Spacer(minLength: 4)
-                                Image(systemName: "arrow.up.left").foregroundStyle(Theme.muted)
-                            }.font(.subheadline).padding(.vertical, 12)
-                        }.buttonStyle(.plain).accessibilityIdentifier("builder-example")
+                        }
+                        composer
                     }
                     if builder.loading { ProgressView("Loading websites…") }
                     if let note = builder.connectionNote {
@@ -133,7 +139,9 @@ struct BuilderView: View {
             }
             .defaultScrollAnchor(builder.selected == nil ? .top : .bottom)
             .scrollDismissesKeyboard(.interactively)
-            composer
+            if builder.selected != nil {
+                composer.frame(maxWidth: .infinity).background(Theme.surface)
+            }
         }
     }
 
@@ -221,7 +229,7 @@ struct BuilderView: View {
                     HStack(spacing: 6) {
                         if builder.sending { ProgressView().tint(.white) }
                         else { Image(systemName: "arrow.up") }
-                        Text(builder.selected == nil ? "Build" : "Send")
+                        Text(builder.selected == nil ? "Build website" : "Send")
                     }.font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 44)
                         .foregroundStyle(.white).background(builder.canSend ? Theme.actionBlue : Theme.surface, in: Capsule())
                 }.disabled(!builder.canSend).accessibilityIdentifier("builder-submit")
@@ -229,8 +237,8 @@ struct BuilderView: View {
             if builder.selected == nil, builder.config?.aiBilling == "prepaid" {
                 Text("Builds use your prepaid balance.").font(.caption).foregroundStyle(Theme.muted)
             }
-        }.padding(16).frame(maxWidth: 640).frame(maxWidth: .infinity)
-            .background(Theme.surface)
+        }.padding(16).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+            .frame(maxWidth: 640)
     }
 
     private var modelMenu: some View {

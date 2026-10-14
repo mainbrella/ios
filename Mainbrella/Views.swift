@@ -1,102 +1,52 @@
 import SwiftUI
 
-enum Destination: String, CaseIterable, Identifiable {
-    case builder = "Build", console = "Workspace", inbox = "Activity", projects = "Projects", account = "Account"
-    var id: String { rawValue }
-    var symbol: String {
-        switch self { case .builder: "hammer"; case .console: "terminal"; case .inbox: "tray"; case .projects: "folder"; case .account: "person.crop.circle" }
-    }
-}
-
 struct RootView: View {
     @EnvironmentObject var store: AppStore
-    @Environment(\.horizontalSizeClass) private var size
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var destination: Destination = .builder
     @StateObject private var builder = BuilderStore()
-    @StateObject private var console = ConsoleTabs()
     @State private var showingSplash = true
     @State private var signInRequired = false
     var body: some View {
-        GeometryReader { geometry in
-            let inspector = size == .regular && geometry.size.width >= 1100
-            Group {
-                if !store.connected {
-                    NavigationStack {
-                        if signInRequired { AccountView() }
-                        else { WelcomeView() }
-                    }
-                } else if size == .regular {
-                    NavigationSplitView {
-                        List(Destination.allCases) { item in
-                            Button { destination = item } label: {
-                                Label(item.rawValue, systemImage: item.symbol).foregroundStyle(destination == item ? Theme.blue : .primary).frame(minHeight: 44)
-                            }
-                        }.navigationTitle("Mainbrella").scrollContentBackground(.hidden)
-                            .background(Theme.background).navigationSplitViewColumnWidth(210)
-                    } detail: {
-                        HStack(spacing: 0) {
-                            NavigationStack { content }.frame(maxWidth: .infinity)
-                            if inspector && destination != .account && destination != .builder, let preview = store.preview {
-                                Divider()
-                                PreviewView(session: preview, embedded: true).id(preview.id)
-                                    .frame(width: 350).background(Theme.surface)
-                            }
-                        }
-                    }
-                } else {
-                    TabView(selection: $destination) {
-                        ForEach(Destination.allCases) { item in
-                            NavigationStack { screen(item) }.tabItem { Label(item.rawValue, systemImage: item.symbol) }.tag(item)
-                        }
-                    }
-                }
-            }
-            .background(Theme.background)
-            .environmentObject(console)
-            .environmentObject(builder)
-            .onChange(of: store.revision) { _, _ in console.reset(); builder.reset() }
-            .sheet(item: Binding(get: { inspector && destination != .account && destination != .builder ? nil : store.preview }, set: { store.preview = $0 })) { preview in
-                NavigationStack { PreviewView(session: preview) }.environmentObject(store)
-            }
-            .alert("Unable to complete request", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
-                Button("OK") { store.error = nil }
-            } message: { Text(store.error ?? "") }
-            .onChange(of: store.connected) { wasConnected, connected in
-                destination = .builder
-                signInRequired = wasConnected && !connected && store.authenticationError != nil
-            }
-            .task(id: LiveSessionIdentity(revision: store.revision, active: scenePhase == .active)) {
-                if scenePhase == .active { await store.followActivity() }
-            }
-            .accessibilityHidden(showingSplash)
-            .allowsHitTesting(!showingSplash)
-            .overlay {
-                if showingSplash { SplashView().transition(.opacity) }
-            }
-            .task {
-                // A short launch transition; account and activity loading run independently.
-                // Never hold the app on a splash while waiting for the network.
-                do { try await Task.sleep(for: .milliseconds(600)) }
-                catch { return }
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showingSplash = false }
+        NavigationStack {
+            if !store.connected {
+                if signInRequired { AccountView() }
+                else { WelcomeView() }
+            } else if store.usesAPIKey {
+                AccountView()
+            } else {
+                BuilderView()
             }
         }
-    }
-    @ViewBuilder private var content: some View { screen(destination) }
-    @ViewBuilder private func screen(_ destination: Destination) -> some View {
-        switch destination {
-        case .builder: BuilderView()
-        case .console: ConsoleView()
-        case .inbox: InboxView()
-        case .projects: WorkspacesView(previewsOnly: false)
-        case .account: AccountView()
+        .id(store.revision)
+        .background(Theme.background)
+        .environmentObject(builder)
+        .onChange(of: store.revision) { _, _ in builder.reset() }
+        .alert("Unable to complete request", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
+            Button("OK") { store.error = nil }
+        } message: { Text(store.error ?? "") }
+        .onChange(of: store.connected) { wasConnected, connected in
+            signInRequired = wasConnected && !connected && store.authenticationError != nil
+        }
+        .task(id: AccountSessionIdentity(revision: store.revision, active: scenePhase == .active)) {
+            if scenePhase == .active { await store.restoreAccount() }
+        }
+        .accessibilityHidden(showingSplash)
+        .allowsHitTesting(!showingSplash)
+        .overlay {
+            if showingSplash { SplashView().transition(.opacity) }
+        }
+        .task {
+            // Account and builder loading run independently of the launch transition.
+            // Never hold the app on a splash while waiting for the network.
+            do { try await Task.sleep(for: .milliseconds(600)) }
+            catch { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showingSplash = false }
         }
     }
 }
 
-private struct LiveSessionIdentity: Equatable {
+private struct AccountSessionIdentity: Equatable {
     let revision: Int
     let active: Bool
 }
