@@ -1,0 +1,28 @@
+{
+  "identifier" : "7D2745B8-045B-476A-AE33-12950607A13B",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "6749770001",
+      "localizations" : [
+        {
+          "description" : "One-time compute credit for building and running websites. Credit reflects proceeds after App Store fees and taxes.",
+          "displayName" : "Mainbrella Compute Credit",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "MAINBRELLA_FIVE",
+      "referenceName" : "Mainbrella Five",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA"
+  },
+  "subscriptionGroups" : [],
+  "version" : { "major" : 3, "minor" : 0 }
+}

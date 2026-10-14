@@ -49,6 +49,11 @@
 		DDAB3295CEB33F13A8A93555 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB4ACC46E82DEB6ADDBAC39 /* PreviewView.swift */; };
 		DF0EB591E0B1E1B37BCC2917 /* InboxAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA30E9C6C371A02FC7E98C8E /* InboxAttachment.swift */; };
 		EC5546143E4366C8593DC536 /* BuildClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC74EE23EA0C08354E93558 /* BuildClient.swift */; };
+		8BE0504F1EA55D2A44ABAAE5 /* BillingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C313811CCFCAE113D064D6C /* BillingClient.swift */; };
+		9459627085AE0CFB09BD27E2 /* ComputeCreditStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 781B27B434A72E01FC48BAA0 /* ComputeCreditStore.swift */; };
+		764C6E18E91EBA27F46CAAD2 /* ComputeCreditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F27DE72F830290F27501E94B /* ComputeCreditView.swift */; };
+		B7C3B174250D7E26621751BC /* ComputeCreditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA07016F26E90BD47C39EC6 /* ComputeCreditTests.swift */; };
+		BCE87D9C856F8673DA1F9F27 /* Mainbrella.storekit in Resources */ = {isa = PBXBuildFile; fileRef = CAFF2594A8AC9AC52D7D77DD /* Mainbrella.storekit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -108,6 +113,11 @@
 		EB72B007AD246864F3F204A9 /* BuilderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuilderStore.swift; sourceTree = "<group>"; };
 		FCA9FAAB713EBF3FA1D8FA2B /* MainbrellaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MainbrellaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FD165057FECFFCACB7CFD1B9 /* WorkspaceTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTools.swift; sourceTree = "<group>"; };
+		8C313811CCFCAE113D064D6C /* BillingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingClient.swift; sourceTree = "<group>"; };
+		781B27B434A72E01FC48BAA0 /* ComputeCreditStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCreditStore.swift; sourceTree = "<group>"; };
+		F27DE72F830290F27501E94B /* ComputeCreditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCreditView.swift; sourceTree = "<group>"; };
+		EAA07016F26E90BD47C39EC6 /* ComputeCreditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCreditTests.swift; sourceTree = "<group>"; };
+		CAFF2594A8AC9AC52D7D77DD /* Mainbrella.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Mainbrella.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,6 +144,7 @@
 		7C01370E63E417914784A983 = {
 			isa = PBXGroup;
 			children = (
+				CAFF2594A8AC9AC52D7D77DD /* Mainbrella.storekit */,
 				D1537FD6A7209C47B5F81C56 /* Mainbrella */,
 				B4C8B10B9B22DFC42FE18F4C /* MainbrellaShare */,
 				FD8839FF69669CC1D1AEFAEE /* MainbrellaTests */,
@@ -145,6 +156,10 @@
 		8EBE13E01CC837C6387D16E6 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				EAA07016F26E90BD47C39EC6 /* ComputeCreditTests.swift */,
+				F27DE72F830290F27501E94B /* ComputeCreditView.swift */,
+				781B27B434A72E01FC48BAA0 /* ComputeCreditStore.swift */,
+				8C313811CCFCAE113D064D6C /* BillingClient.swift */,
 				9AC5F495BA6E19342E8F9BFD /* Mainbrella.app */,
 				1F8A31D8BEB179371302E39A /* MainbrellaShare.appex */,
 				15E5FC29F2E5C57CDDC3040B /* MainbrellaTests.xctest */,
@@ -339,6 +354,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BCE87D9C856F8673DA1F9F27 /* Mainbrella.storekit in Resources */,
 				95F423E3C613FD0F0A436469 /* Assets.xcassets in Resources */,
 				C075D674E0D310E08D4FF6A3 /* LaunchScreen.storyboard in Resources */,
 			);
@@ -374,6 +390,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B7C3B174250D7E26621751BC /* ComputeCreditTests.swift in Sources */,
 				59EE6403941A06D1E3C00F8A /* APIClientTests.swift in Sources */,
 				011AE3B1284702BD93A22170 /* ActivityTests.swift in Sources */,
 				105624E757FE802AE72A6D5E /* AuthTests.swift in Sources */,
@@ -388,6 +405,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				764C6E18E91EBA27F46CAAD2 /* ComputeCreditView.swift in Sources */,
+				9459627085AE0CFB09BD27E2 /* ComputeCreditStore.swift in Sources */,
+				8BE0504F1EA55D2A44ABAAE5 /* BillingClient.swift in Sources */,
 				CCAD223FBE202555804638DA /* APIClient.swift in Sources */,
 				C352ABD78239009A86173004 /* AccountView.swift in Sources */,
 				DB8AA6F1895457FA0D862445 /* ActivityStream.swift in Sources */,

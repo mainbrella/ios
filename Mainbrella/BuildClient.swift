@@ -108,7 +108,7 @@ enum BuildError: LocalizedError {
         case .response(let status, let code):
             if status == 401 { return "Your sign-in expired. Sign in again in Account." }
             switch code {
-            case "subscription_required", "insufficient_balance": return "Add prepaid balance at mainbrella.com to build and run websites."
+            case "subscription_required", "insufficient_balance": return "Add compute credit in Account to build and run websites."
             case "spend_limit_exceeded": return "Your monthly spending limit cannot cover this build. Update your limit in Billing."
             case "build_busy": return "Another build is running. Wait for it to finish."
             case "revision_conflict": return "This website changed elsewhere. Reconnect before sending your change."

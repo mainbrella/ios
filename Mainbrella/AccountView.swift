@@ -3,6 +3,7 @@ import GoogleSignInSwift
 
 struct AccountView: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var credits: ComputeCreditStore
     @State private var email = ""
     @State private var password = ""
     @FocusState private var focusedField: Field?
@@ -18,6 +19,7 @@ struct AccountView: View {
                     Text("Remove the API key saved by an earlier version, then sign in to build.")
                 }
             } else if store.connected {
+                Section("Compute credit") { ComputeCreditView() }
                 Section {
                     if let user = store.user {
                         if !user.name.isEmpty { LabeledContent("Name", value: user.name) }
@@ -32,7 +34,7 @@ struct AccountView: View {
                     Button(store.authenticationBusy ? "Signing out…" : "Sign out") {
                         Task { await store.signOut() }
                     }
-                }.disabled(store.authenticationBusy)
+                }.disabled(store.authenticationBusy || credits.busy)
             } else {
                 Section {
                     GoogleSignInButton(scheme: .dark, style: .wide, state: .normal) {

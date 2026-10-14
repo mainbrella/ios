@@ -37,6 +37,12 @@ import GoogleSignIn
     }
     var connected: Bool { !token.isEmpty }
     var usesAPIKey: Bool { token.hasPrefix("mb_") }
+    var billingAPI: BillingClient {
+        get throws {
+            guard connected, !usesAPIKey else { throw CreditError.response(401, "not_authenticated") }
+            return BillingClient(baseURL: ServiceURLs.api, token: token, session: session)
+        }
+    }
     private var auth: AuthClient { AuthClient(baseURL: ServiceURLs.api, session: session) }
     var buildAPI: BuildClient {
         get throws {

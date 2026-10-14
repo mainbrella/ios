@@ -5,6 +5,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var builder = BuilderStore()
+    @StateObject private var credits = ComputeCreditStore()
     @State private var showingSplash = true
     @State private var signInRequired = false
     var body: some View {
@@ -21,7 +22,14 @@ struct RootView: View {
         .id(store.revision)
         .background(Theme.background)
         .environmentObject(builder)
-        .onChange(of: store.revision) { _, _ in builder.reset() }
+        .environmentObject(credits)
+        .onChange(of: store.revision) { _, _ in builder.reset(); credits.reset() }
+        .task(id: store.revision) {
+            if let client = try? store.billingAPI { await credits.run(client) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await credits.refresh() } }
+        }
         .alert("Unable to complete request", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }

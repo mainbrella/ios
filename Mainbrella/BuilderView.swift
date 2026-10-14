@@ -3,6 +3,7 @@ import SwiftUI
 struct BuilderView: View {
     @EnvironmentObject private var account: AppStore
     @EnvironmentObject private var builder: BuilderStore
+    @EnvironmentObject private var credits: ComputeCreditStore
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var speech = PromptSpeech()
@@ -118,6 +119,7 @@ struct BuilderView: View {
                                 .font(.body).foregroundStyle(Theme.muted)
                         }
                         composer
+                        ComputeCreditView()
                     }
                     if builder.loading { ProgressView("Loading websites…") }
                     if let note = builder.connectionNote {
@@ -233,9 +235,6 @@ struct BuilderView: View {
                     }.font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 44)
                         .foregroundStyle(.white).background(builder.canSend ? Theme.actionBlue : Theme.surface, in: Capsule())
                 }.disabled(!builder.canSend).accessibilityIdentifier("builder-submit")
-            }
-            if builder.selected == nil, builder.config?.aiBilling == "prepaid" {
-                Text("Builds use your prepaid balance.").font(.caption).foregroundStyle(Theme.muted)
             }
         }.padding(16).background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
             .frame(maxWidth: 640)
