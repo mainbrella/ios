@@ -50,18 +50,18 @@ enum ComputePurchaseResult { case purchased(ComputeTransaction), pending, cancel
     }
     func unfinished() async -> [ComputeTransaction] {
         var transactions: [ComputeTransaction] = []
-        for await result in Transaction.unfinished {
+        for await result in StoreKit.Transaction.unfinished {
             if let transaction = Self.verified(result) { transactions.append(transaction) }
         }
         return transactions
     }
     func updates(_ receive: @escaping @MainActor (ComputeTransaction) async -> Void) async {
-        for await result in Transaction.updates {
+        for await result in StoreKit.Transaction.updates {
             if Task.isCancelled { return }
             if let transaction = Self.verified(result) { await receive(transaction) }
         }
     }
-    private static func verified(_ result: VerificationResult<Transaction>) -> ComputeTransaction? {
+    private static func verified(_ result: VerificationResult<StoreKit.Transaction>) -> ComputeTransaction? {
         guard case .verified(let transaction) = result, transaction.productID == ComputeProduct.id else { return nil }
         return ComputeTransaction(id: String(transaction.id), accountToken: transaction.appAccountToken,
                                   signed: result.jwsRepresentation, finish: { await transaction.finish() })

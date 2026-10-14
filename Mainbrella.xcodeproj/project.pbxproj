@@ -156,10 +156,6 @@
 		8EBE13E01CC837C6387D16E6 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				EAA07016F26E90BD47C39EC6 /* ComputeCreditTests.swift */,
-				F27DE72F830290F27501E94B /* ComputeCreditView.swift */,
-				781B27B434A72E01FC48BAA0 /* ComputeCreditStore.swift */,
-				8C313811CCFCAE113D064D6C /* BillingClient.swift */,
 				9AC5F495BA6E19342E8F9BFD /* Mainbrella.app */,
 				1F8A31D8BEB179371302E39A /* MainbrellaShare.appex */,
 				15E5FC29F2E5C57CDDC3040B /* MainbrellaTests.xctest */,
@@ -186,10 +182,13 @@
 				4E828FB9B66A0E9D6D24D6B4 /* AppStore.swift */,
 				3BD736C94C3F43D45D03A9F1 /* Assets.xcassets */,
 				C7695579679A633F115925B4 /* AuthClient.swift */,
+				8C313811CCFCAE113D064D6C /* BillingClient.swift */,
 				3BC74EE23EA0C08354E93558 /* BuildClient.swift */,
 				733BE4B9C87701DD6C24D85B /* BuilderPreviewView.swift */,
 				EB72B007AD246864F3F204A9 /* BuilderStore.swift */,
 				4552FDB8EA9ADC9BC2A91AF8 /* BuilderView.swift */,
+				781B27B434A72E01FC48BAA0 /* ComputeCreditStore.swift */,
+				F27DE72F830290F27501E94B /* ComputeCreditView.swift */,
 				C14B24806C655833739497A7 /* ConsoleView.swift */,
 				DB2952A10A02A4A2C48DA3FF /* GoogleLogin.swift */,
 				CA30E9C6C371A02FC7E98C8E /* InboxAttachment.swift */,
@@ -216,6 +215,7 @@
 				BD4912731F4CFB911B2D560A /* APIClientTests.swift */,
 				193C129956342695BE47F6BE /* AuthTests.swift */,
 				50A99DFE5E39BAB2A61DECBA /* BuilderTests.swift */,
+				EAA07016F26E90BD47C39EC6 /* ComputeCreditTests.swift */,
 				A5ECE1411DE922EF20CC3968 /* ConsoleTests.swift */,
 				E9C18E1CF344A0BFCB04856C /* ShareTests.swift */,
 				C6128933EE462488D2D26B33 /* WorkspaceAttachmentTests.swift */,

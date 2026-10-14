@@ -41,6 +41,7 @@ enum CreditError: LocalizedError {
 }
 
 struct BillingClient {
+    private struct Failure: Decodable { let error: String }
     let baseURL: URL
     let token: String
     var session: URLSession = .shared
@@ -82,7 +83,6 @@ struct BillingClient {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw CreditError.deliveryPending }
         guard (200..<300).contains(http.statusCode) else {
-            struct Failure: Decodable { let error: String }
             throw CreditError.response(http.statusCode, (try? JSONDecoder().decode(Failure.self, from: data))?.error ?? "")
         }
         return try JSONDecoder().decode(T.self, from: data)
