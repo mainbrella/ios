@@ -2,19 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Dictate prompts for your cloud workspace.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Turn your spoken prompts into editable text. Audio may be processed by Apple’s speech recognition service.</string>
-	<key>GIDClientID</key>
-	<string>854186419005-tc4r5t0se5m0hrfc2a66ipndei6tprgu.apps.googleusercontent.com</string>
-	<key>GIDServerClientID</key>
-	<string>854186419005-l0u2olqlqe40qmgin0q8tjpvftooi6ac.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -24,9 +11,18 @@
 			</array>
 		</dict>
 	</array>
+	<key>GIDClientID</key>
+	<string>854186419005-tc4r5t0se5m0hrfc2a66ipndei6tprgu.apps.googleusercontent.com</string>
+	<key>GIDServerClientID</key>
+	<string>854186419005-l0u2olqlqe40qmgin0q8tjpvftooi6ac.apps.googleusercontent.com</string>
 	<key>MainbrellaKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.mainbrella.shared</string>
 	<key>MainbrellaLegacyKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.mainbrella.ios</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
