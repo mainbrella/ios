@@ -1,10 +1,32 @@
 import SwiftUI
 
+@MainActor final class BuilderPreviewState {
+    let controller = PreviewController()
+    private var lastURL: URL?
+    private var lastRevision: Int?
+
+    func load(url: URL, revision: Int) {
+        guard lastURL != url || lastRevision != revision else { return }
+        lastURL = url
+        lastRevision = revision
+        controller.load(url)
+    }
+}
+
 struct BuilderPreviewView: View {
     let url: URL
     let revision: Int
-    @StateObject private var controller = PreviewController()
+    let state: BuilderPreviewState
+    @ObservedObject private var controller: PreviewController
     private struct LoadIdentity: Equatable { let url: URL; let revision: Int }
+
+    init(url: URL, revision: Int, state: BuilderPreviewState) {
+        self.url = url
+        self.revision = revision
+        self.state = state
+        _controller = ObservedObject(wrappedValue: state.controller)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -31,7 +53,6 @@ struct BuilderPreviewView: View {
                 }
             }
         }
-        .task(id: LoadIdentity(url: url, revision: revision)) { controller.load(url) }
-        .onDisappear { controller.stop() }
+        .task(id: LoadIdentity(url: url, revision: revision)) { state.load(url: url, revision: revision) }
     }
 }

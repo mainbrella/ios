@@ -10,6 +10,7 @@ import XCTest
     }
     override func tearDown() {
         StubProtocol.handler = nil
+        StubProtocol.responseHeaders = nil
         client.session.invalidateAndCancel()
     }
     private static let appID = "11111111-1111-4111-8111-111111111111"
@@ -29,6 +30,34 @@ import XCTest
             result.append(contentsOf: buffer.prefix(count))
         }
         return result
+    }
+    private static let secondAppID = "22222222-2222-4222-8222-222222222222"
+    private static let configuration = Data("""
+    {"available":true,"model":"default","models":[{"id":"default","name":"Default","efforts":["low","high"],"defaultEffort":"low"},{"id":"other","name":"Other","efforts":["low","high"],"defaultEffort":"low"}],"maxApps":50,"aiBilling":"prepaid"}
+    """.utf8)
+    private static func sessionSnapshot(id: String? = nil, active: Bool = false, revision: Int = 1, preview: Bool = false) throws -> Data {
+        let id = id ?? appID
+        var value = try JSONSerialization.jsonObject(with: snapshot(active: active, revision: revision)) as! [String: Any]
+        var app = value["app"] as! [String: Any]
+        app["id"] = id
+        app["name"] = id == appID ? "Frogs" : "Birds"
+        if preview {
+            app["preview"] = ["id": "preview", "url": "https://" + String(repeating: "a", count: 48) + ".mainbrella.dev/",
+                              "expiresAt": Date().addingTimeInterval(900).timeIntervalSince1970 * 1000] as [String: Any]
+        }
+        value["app"] = app
+        return try JSONSerialization.data(withJSONObject: value)
+    }
+    private static func inventory(_ snapshots: [Data]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["apps": snapshots.map {
+            (try JSONSerialization.jsonObject(with: $0) as! [String: Any])["app"]!
+        }])
+    }
+    private func stubEmptyAccount() {
+        StubProtocol.handler = { request in
+            if request.url?.path == "/build/config" { return (200, Self.configuration) }
+            return (200, Data("{\"apps\":[]}".utf8))
+        }
     }
     func testDebugUsesLocalAPI() {
         #if DEBUG
@@ -196,6 +225,210 @@ import XCTest
             XCTAssertTrue(message.contains("Reconnect"))
             XCTAssertFalse(message.contains("saved work"))
         }
+    }
+    func testSessionsKeepIndependentDraftsModelsEffortsAndPanels() async throws {
+        stubEmptyAccount()
+        let store = BuilderStore()
+        await store.load(client)
+        let first = store.activeSessionID
+        store.draft = "A field guide to frogs"
+        store.effort = "high"
+        store.panel = .preview
+        store.newWebsite()
+        let second = store.activeSessionID
+        store.draft = "A bird journal"
+        store.model = "other"
+        store.effort = "high"
+        store.selectSession(first)
+        XCTAssertEqual(store.draft, "A field guide to frogs")
+        XCTAssertEqual(store.model, "default")
+        XCTAssertEqual(store.effort, "high")
+        XCTAssertEqual(store.panel, .preview)
+        store.switchToPreviousSession()
+        XCTAssertEqual(store.activeSessionID, second)
+        XCTAssertEqual(store.draft, "A bird journal")
+        XCTAssertEqual(store.model, "other")
+        XCTAssertEqual(store.effort, "high")
+        XCTAssertEqual(store.panel, .build)
+        XCTAssertEqual(store.sessions.count, 2)
+    }
+    func testAnotherSessionCanSubmitWhileFirstWebsiteBuilds() async throws {
+        var writes = 0
+        StubProtocol.handler = { request in
+            if request.url?.path == "/build/config" { return (200, Self.configuration) }
+            if request.httpMethod == "GET" { return (200, Data("{\"apps\":[]}".utf8)) }
+            writes += 1
+            return (202, try Self.sessionSnapshot(id: writes == 1 ? Self.appID : Self.secondAppID, active: true))
+        }
+        let store = BuilderStore()
+        await store.load(client)
+        let first = store.activeSessionID
+        store.draft = "A frog guide"
+        await store.send(client)
+        XCTAssertTrue(store.busy)
+        store.newWebsite()
+        store.draft = "A bird guide"
+        XCTAssertFalse(store.busy)
+        XCTAssertTrue(store.canSend)
+        await store.send(client)
+        XCTAssertEqual(writes, 2)
+        XCTAssertEqual(store.selected?.id, Self.secondAppID)
+        XCTAssertEqual(store.sessions.filter(\.isRunning).count, 2)
+        store.selectSession(first)
+        XCTAssertEqual(store.selected?.id, Self.appID)
+        XCTAssertTrue(store.busy)
+    }
+    func testCreateResponseReturnsToSubmittingSessionAfterSwitch() async throws {
+        stubEmptyAccount()
+        let store = BuilderStore()
+        await store.load(client)
+        let first = store.activeSessionID
+        store.draft = "A frog guide"
+        let started = expectation(description: "Create in flight")
+        let gate = DispatchSemaphore(value: 0)
+        StubProtocol.handler = { _ in
+            started.fulfill()
+            guard gate.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+            return (202, Self.snapshot(active: true))
+        }
+        let send = Task { await store.send(client, sessionID: first) }
+        await fulfillment(of: [started], timeout: 3)
+        XCTAssertTrue(store.sending)
+        store.newWebsite()
+        let second = store.activeSessionID
+        store.draft = "Keep this bird draft"
+        XCTAssertFalse(store.sending)
+        XCTAssertTrue(store.canSend)
+        gate.signal()
+        await send.value
+        XCTAssertEqual(store.activeSessionID, second)
+        XCTAssertNil(store.selected)
+        XCTAssertEqual(store.draft, "Keep this bird draft")
+        XCTAssertEqual(store.sessions.first { $0.id == first }?.app?.id, Self.appID)
+        XCTAssertEqual(store.sessions.first { $0.id == first }?.draft, "")
+    }
+    func testRetryIdentityAndErrorStayWithTheirSession() async throws {
+        var writes: [(key: String?, prompt: String)] = []
+        StubProtocol.handler = { request in
+            if request.url?.path == "/build/config" { return (200, Self.configuration) }
+            if request.httpMethod == "GET" { return (200, Data("{\"apps\":[]}".utf8)) }
+            let body = try JSONSerialization.jsonObject(with: Self.body(request)) as! [String: String]
+            let prompt = body["prompt"]!
+            writes.append((request.value(forHTTPHeaderField: "Idempotency-Key"), prompt))
+            if writes.count == 1 { throw URLError(.networkConnectionLost) }
+            return (202, try Self.sessionSnapshot(id: prompt == "Frogs" ? Self.appID : Self.secondAppID, active: true))
+        }
+        let store = BuilderStore()
+        await store.load(client)
+        let first = store.activeSessionID
+        store.draft = "Frogs"
+        await store.send(client)
+        XCTAssertNotNil(store.error)
+        store.newWebsite()
+        XCTAssertNil(store.error)
+        store.draft = "Birds"
+        await store.send(client)
+        store.selectSession(first)
+        XCTAssertNotNil(store.error)
+        XCTAssertEqual(store.draft, "Frogs")
+        await store.send(client)
+        XCTAssertEqual(writes.count, 3)
+        XCTAssertEqual(writes[0].key, writes[2].key)
+        XCTAssertNotEqual(writes[0].key, writes[1].key)
+        XCTAssertEqual(store.selected?.id, Self.appID)
+        XCTAssertNil(store.error)
+    }
+    func testRestoreAllRunningSessionsAndBackgroundCompletionDoesNotNavigate() async throws {
+        let firstRunning = try Self.sessionSnapshot(active: true)
+        let secondRunning = try Self.sessionSnapshot(id: Self.secondAppID, active: true)
+        let inventory = try Self.inventory([firstRunning, secondRunning])
+        StubProtocol.handler = { request in
+            if request.url?.path == "/build/config" { return (200, Self.configuration) }
+            if request.url?.path == "/build/apps" { return (200, inventory) }
+            return (200, try Self.sessionSnapshot(preview: true))
+        }
+        let store = BuilderStore()
+        await store.load(client)
+        XCTAssertEqual(store.sessions.count, 2)
+        let first = try XCTUnwrap(store.sessions.first { $0.app?.id == Self.appID })
+        let second = try XCTUnwrap(store.sessions.first { $0.app?.id == Self.secondAppID })
+        store.selectSession(second.id)
+        store.draft = "Keep this follow-up"
+        await store.loadSelected(client, sessionID: first.id)
+        XCTAssertEqual(store.activeSessionID, second.id)
+        XCTAssertEqual(store.selected?.id, Self.secondAppID)
+        XCTAssertEqual(store.draft, "Keep this follow-up")
+        let completed = try XCTUnwrap(store.sessions.first { $0.id == first.id })
+        XCTAssertTrue(completed.hasUnseenUpdate)
+        XCTAssertEqual(completed.panel, .preview)
+        store.selectSession(first.id)
+        XCTAssertFalse(store.activeSession.hasUnseenUpdate)
+    }
+    func testReopeningAndClosingSessionKeepsCloudWebsite() async throws {
+        let snapshot = try Self.sessionSnapshot(active: true)
+        StubProtocol.handler = { request in
+            if request.url?.path == "/build/config" { return (200, Self.configuration) }
+            return (200, try Self.inventory([snapshot]))
+        }
+        let store = BuilderStore()
+        await store.load(client)
+        let app = try XCTUnwrap(store.selected)
+        let first = store.activeSessionID
+        store.draft = "A follow-up"
+        store.open(app)
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertEqual(store.draft, "A follow-up")
+        XCTAssertTrue(store.closeSession(first))
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertNil(store.selected)
+        XCTAssertEqual(store.apps.first?.id, app.id)
+        XCTAssertTrue(store.apps.first!.building)
+        await store.load(client)
+        XCTAssertNil(store.selected, "A closed running session must not reopen on inventory refresh")
+        store.open(app)
+        XCTAssertEqual(store.sessions.count, 2)
+        XCTAssertEqual(store.selected?.id, app.id)
+    }
+    func testAccountResetDiscardsLateCreateResponse() async throws {
+        stubEmptyAccount()
+        let store = BuilderStore()
+        await store.load(client)
+        store.draft = "Frogs"
+        let started = expectation(description: "Create in flight")
+        let gate = DispatchSemaphore(value: 0)
+        StubProtocol.handler = { _ in
+            started.fulfill()
+            guard gate.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+            return (202, Self.snapshot(active: true))
+        }
+        let send = Task { await store.send(client) }
+        await fulfillment(of: [started], timeout: 3)
+        store.reset()
+        let resetSession = store.activeSessionID
+        gate.signal()
+        await send.value
+        XCTAssertEqual(store.activeSessionID, resetSession)
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertNil(store.selected)
+        XCTAssertTrue(store.apps.isEmpty)
+        XCTAssertFalse(store.sending)
+    }
+    func testAccountSSEParsesInventoryAndIndependentAppProgress() throws {
+        var parser = BuildEventParser()
+        let snapshots = try [Self.sessionSnapshot(active: true), Self.sessionSnapshot(id: Self.secondAppID, active: true)]
+        XCTAssertNil(try parser.consumeProgress("event: apps"))
+        XCTAssertNil(try parser.consumeProgress("data: " + String(decoding: Self.inventory(snapshots), as: UTF8.self)))
+        guard case .apps(let apps) = try parser.consumeProgress("") else { return XCTFail("Missing inventory") }
+        XCTAssertEqual(apps.map(\.id), [Self.appID, Self.secondAppID])
+        for (index, data) in snapshots.enumerated() {
+            XCTAssertNil(try parser.consumeProgress("event: app"))
+            XCTAssertNil(try parser.consumeProgress("data: " + String(decoding: data, as: UTF8.self)))
+            guard case .app(let app) = try parser.consumeProgress("") else { return XCTFail("Missing app progress") }
+            XCTAssertEqual(app.id, apps[index].id)
+        }
+        XCTAssertNil(try parser.consumeProgress("event: apps"))
+        XCTAssertNil(try parser.consumeProgress("data: " + String(decoding: Self.inventory([snapshots[0], snapshots[0]]), as: UTF8.self)))
+        XCTAssertThrowsError(try parser.consumeProgress(""), "Duplicate identities must not corrupt the session inventory")
     }
     func testAPIKeyCannotBeUsedAsBuilderSession() {
         let account = AppStore(token: "mb_test", saveToken: { _ in })

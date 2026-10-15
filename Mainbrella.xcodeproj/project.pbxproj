@@ -504,6 +504,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Mainbrella/Mainbrella.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 755R3VBZ84;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mainbrella/Info.plist;
@@ -545,6 +546,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Mainbrella/Mainbrella.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 755R3VBZ84;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mainbrella/Info.plist;

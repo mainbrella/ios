@@ -5,20 +5,24 @@ struct BuilderView: View {
     @EnvironmentObject private var builder: BuilderStore
     @EnvironmentObject private var credits: ComputeCreditStore
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @StateObject private var speech = PromptSpeech()
     @State private var speechPrefix = ""
-    @State private var panel = Panel.build
+    @State private var speechSessionID: UUID?
     @State private var showingWebsites = false
     @State private var showingAccount = false
+    @State private var showingSessions = false
+    @State private var pendingCloseSession: BuilderSession?
     @State private var reconnect = UUID()
     @ScaledMetric(relativeTo: .body) private var composerHeight = 80
     @FocusState private var promptFocused: Bool
-    private enum Panel: String, CaseIterable { case build = "Build", preview = "Preview" }
     private struct WatchIdentity: Equatable {
-        let appID: String?
-        let turnID: String?
-        let revision: Int
+        let accountRevision: Int
+        let active: Bool
+        let reconnect: UUID
+    }
+    private struct SelectionIdentity: Equatable {
+        let sessionID: UUID
         let active: Bool
         let reconnect: UUID
     }
@@ -28,20 +32,21 @@ struct BuilderView: View {
             let sideBySide = geometry.size.width >= 900
             VStack(spacing: 0) {
                 if !sideBySide, builder.selected != nil {
-                    Picker("Build view", selection: $panel) {
-                        ForEach(Panel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    Picker("Build view", selection: $builder.panel) {
+                        Text("Build").tag(BuilderPanel.build)
+                        Text("Preview").tag(BuilderPanel.preview)
                     }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
                         .accessibilityIdentifier("builder-panels")
                 }
                 if sideBySide, builder.selected != nil {
                     HStack(spacing: 0) {
-                        conversation.frame(width: min(420, geometry.size.width * 0.42))
+                        conversation.id(builder.activeSessionID).frame(width: min(420, geometry.size.width * 0.42))
                         Divider()
                         preview.frame(maxWidth: .infinity)
                     }
-                } else if panel == .preview, builder.selected != nil {
+                } else if builder.panel == .preview, builder.selected != nil {
                     preview
-                } else { conversation }
+                } else { conversation.id(builder.activeSessionID) }
             }
         }
         .background(Theme.background)
@@ -49,23 +54,18 @@ struct BuilderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { speech.stop(); showingWebsites = true } label: { Image(systemName: "folder").frame(width: 44, height: 44) }
+                Button { stopSpeech(); showingWebsites = true } label: { Image(systemName: "folder").frame(width: 44, height: 44) }
                     .accessibilityLabel("Saved websites").accessibilityIdentifier("builder-websites")
             }
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if builder.selected != nil {
-                    Button {
-                        speech.stop(); builder.newWebsite(); panel = .build
-                    } label: { Image(systemName: "square.and.pencil").frame(width: 44, height: 44) }
-                        .disabled(builder.sending).accessibilityLabel("New website")
-                        .accessibilityIdentifier("builder-new-website")
-                }
-                Button { speech.stop(); showingAccount = true } label: {
+                Button { stopSpeech(); showingAccount = true } label: {
                     Image(systemName: "person.crop.circle").frame(width: 44, height: 44)
                 }.accessibilityLabel("Account").accessibilityIdentifier("builder-account")
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { sessionBar }
         .sheet(isPresented: $showingWebsites) { websites }
+        .sheet(isPresented: $showingSessions) { sessions }
         .sheet(isPresented: $showingAccount) {
             NavigationStack {
                 AccountView().toolbar {
@@ -73,39 +73,33 @@ struct BuilderView: View {
                 }
             }
         }
-        .task(id: account.revision) {
-            do { await builder.load(try account.buildAPI) }
+        .task(id: WatchIdentity(accountRevision: account.revision, active: scenePhase == .active, reconnect: reconnect)) {
+            guard scenePhase == .active else { return }
+            do { await builder.run(try account.buildAPI) }
             catch { builder.error = error.localizedDescription }
         }
-        .task(id: WatchIdentity(appID: builder.selected?.id, turnID: builder.selected?.activeTurnId, revision: account.revision, active: scenePhase == .active, reconnect: reconnect)) {
-            guard scenePhase == .active, let id = builder.selected?.id else { return }
-            do { await builder.follow(try account.buildAPI, id: id) }
+        .task(id: SelectionIdentity(sessionID: builder.activeSessionID, active: scenePhase == .active, reconnect: reconnect)) {
+            guard scenePhase == .active else { return }
+            let sessionID = builder.activeSessionID
+            do { await builder.loadSelected(try account.buildAPI, sessionID: sessionID) }
             catch { builder.error = error.localizedDescription }
-        }
-        .onChange(of: builder.selected?.latestTurn?.status) { previous, current in
-            if ["queued", "running"].contains(previous ?? ""), current == "succeeded", builder.selected?.previewURL() != nil {
-                promptFocused = false
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { panel = .preview }
-            }
         }
         .onChange(of: speech.transcript) { _, text in
-            guard !text.isEmpty else { return }
+            guard !text.isEmpty, speechSessionID == builder.activeSessionID else { return }
             builder.draft = speechPrefix + (speechPrefix.isEmpty ? "" : " ") + text
         }
-        .onChange(of: builder.busy) { _, busy in if busy { speech.stop() } }
-        .onChange(of: builder.selected?.id) { _, _ in speech.stop() }
-        .onChange(of: scenePhase) { _, phase in if phase != .active { speech.stop() } }
-        .onDisappear { speech.stop() }
+        .onChange(of: builder.sending) { _, sending in if sending { stopSpeech() } }
+        .onChange(of: builder.activeSessionID) { _, _ in
+            stopSpeech(); promptFocused = false
+        }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { stopSpeech() } }
+        .onDisappear { stopSpeech() }
     }
 
     private var conversation: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    if let running = builder.apps.first(where: { $0.building && $0.id != builder.selected?.id }) {
-                        Button("Open running build: \(running.name)") { builder.open(running); panel = .build }
-                            .font(.subheadline).frame(minHeight: 44)
-                    }
                     if let app = builder.selected {
                         if app.turns == nil { ProgressView("Loading build…") }
                         ForEach(app.turns ?? []) { turn in
@@ -125,13 +119,10 @@ struct BuilderView: View {
                     if let note = builder.connectionNote {
                         Label(note, systemImage: "wifi.exclamationmark").font(.footnote).foregroundStyle(Theme.muted)
                     }
-                    if let error = builder.error {
+                    if let error = builder.error ?? builder.loadError ?? builder.streamError {
                         VStack(alignment: .leading, spacing: 8) {
                             Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.orange)
-                            Button("Reconnect") {
-                                reconnect = UUID()
-                                Task { do { await builder.load(try account.buildAPI) } catch { builder.error = error.localizedDescription } }
-                            }.frame(minHeight: 44)
+                            Button("Reconnect") { reconnect = UUID() }.frame(minHeight: 44)
                         }.accessibilityIdentifier("builder-error")
                     }
                     if builder.config?.available == false {
@@ -208,7 +199,7 @@ struct BuilderView: View {
                     .scrollContentBackground(.hidden).font(.body).focused($promptFocused)
                     .frame(height: min(composerHeight, 160))
                     .accessibilityLabel("Website prompt").accessibilityIdentifier("builder-prompt")
-                    .disabled(builder.busy)
+                    .disabled(builder.sending)
                 if builder.draft.isEmpty {
                     Text(builder.selected == nil ? "Describe your website…" : "Ask for a change…")
                         .foregroundStyle(Theme.muted).padding(.top, 8).padding(.leading, 5)
@@ -219,14 +210,19 @@ struct BuilderView: View {
                 modelMenu
                 Spacer(minLength: 0)
                 Button {
-                    if speech.isRecording || speech.isStarting { speech.stop() }
-                    else { speechPrefix = builder.draft; Task { await speech.start() } }
+                    if speech.isRecording || speech.isStarting { stopSpeech() }
+                    else {
+                        speechSessionID = builder.activeSessionID
+                        speechPrefix = builder.draft
+                        Task { await speech.start() }
+                    }
                 } label: {
                     Image(systemName: speech.isRecording ? "stop.circle" : "mic").font(.title3).frame(width: 44, height: 44)
-                }.disabled(builder.busy).accessibilityLabel(speech.isRecording ? "Stop dictation" : "Dictate prompt")
+                }.disabled(builder.sending).accessibilityLabel(speech.isRecording ? "Stop dictation" : "Dictate prompt")
                 Button {
-                    speech.stop(); promptFocused = false
-                    Task { do { await builder.send(try account.buildAPI) } catch { builder.error = error.localizedDescription } }
+                    stopSpeech(); promptFocused = false
+                    let sessionID = builder.activeSessionID
+                    Task { do { await builder.send(try account.buildAPI, sessionID: sessionID) } catch { builder.error = error.localizedDescription } }
                 } label: {
                     HStack(spacing: 6) {
                         if builder.sending { ProgressView().tint(.white) }
@@ -255,31 +251,187 @@ struct BuilderView: View {
                 Text(builder.chosenModel?.name ?? "Default model").lineLimit(1)
                 Image(systemName: "chevron.down").font(.caption2)
             }.font(.caption).foregroundStyle(Theme.muted).frame(minHeight: 44)
-        }.disabled(builder.busy || builder.config?.models?.isEmpty != false)
-            .onChange(of: builder.model) { _, _ in builder.selectModel() }
+        }.disabled(builder.sending || builder.config?.models?.isEmpty != false)
             .accessibilityLabel("Build model and effort")
     }
 
     private var preview: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            if let app = builder.selected, let url = app.previewURL(at: context.date) {
-                BuilderPreviewView(url: url, revision: app.revision)
-            } else {
-                VStack(spacing: 12) {
-                    if builder.selected?.building == true {
-                        ProgressView()
-                        Text("Your preview will appear when the build is ready.")
-                    } else if (builder.selected?.revision ?? 0) > 0 {
-                        Text("The preview has expired. Your website is saved.")
-                        Button("Start preview") {
-                            Task { do { await builder.send(try account.buildAPI, restartPreview: true) } catch { builder.error = error.localizedDescription } }
-                            panel = .build
-                        }.buttonStyle(ActionStyle()).disabled(builder.busy || builder.config?.available != true)
-                    } else { Text("Your preview will appear after a successful build.") }
-                }.font(.subheadline).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
-                    .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            Group {
+                if let app = builder.selected, let url = app.previewURL(at: context.date) {
+                    BuilderPreviewView(url: url, revision: app.revision, state: builder.previewState(for: builder.activeSessionID))
+                } else {
+                    VStack(spacing: 12) {
+                        if builder.selected?.building == true {
+                            ProgressView()
+                            Text("Your preview will appear when the build is ready.")
+                        } else if (builder.selected?.revision ?? 0) > 0 {
+                            Text("The preview has expired. Your website is saved.")
+                            Button("Start preview") {
+                                let sessionID = builder.activeSessionID
+                                Task { do { await builder.send(try account.buildAPI, restartPreview: true, sessionID: sessionID) } catch { builder.error = error.localizedDescription } }
+                                builder.panel = .build
+                            }.buttonStyle(ActionStyle()).disabled(builder.busy || builder.config?.available != true)
+                        } else { Text("Your preview will appear after a successful build.") }
+                    }.font(.subheadline).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+                        .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }.id(builder.activeSessionID)
         }
+    }
+
+    private var sessionBar: some View {
+        HStack(spacing: 10) {
+            Button {
+                stopSpeech(); promptFocused = false; showingSessions = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.on.square")
+                    Text("Sessions")
+                    Text("\(builder.sessions.count)").font(.caption.monospacedDigit()).foregroundStyle(Theme.muted)
+                    if unseenSessionCount > 0 {
+                        Circle().fill(Theme.blue).frame(width: 7, height: 7)
+                    }
+                }.font(.subheadline.weight(.medium)).frame(minHeight: 44)
+            }
+            .accessibilityLabel("Sessions")
+            .accessibilityValue("\(builder.sessions.count) sessions, \(runningSessionCount) building, \(unseenSessionCount) with updates")
+            .accessibilityIdentifier("builder-sessions")
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+            .contextMenu {
+                if builder.sessions.count > 1 {
+                    Button("Previous session", systemImage: "arrow.uturn.backward") {
+                        stopSpeech(); promptFocused = false; builder.switchToPreviousSession()
+                    }
+                }
+            }
+            if runningSessionCount > 0, !dynamicTypeSize.isAccessibilitySize {
+                Text("\(runningSessionCount) building")
+                    .font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Button {
+                stopSpeech(); promptFocused = false; builder.newWebsite(); builder.panel = .build
+            } label: {
+                Image(systemName: "plus").font(.body.weight(.medium))
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .foregroundStyle(Theme.blue)
+            .accessibilityLabel("New website")
+            .accessibilityIdentifier("builder-new-website")
+            .keyboardShortcut("n", modifiers: .command)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 6)
+        .background(Theme.surface)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.muted.opacity(0.16)).frame(height: 0.5) }
+    }
+
+    private var runningSessionCount: Int { builder.sessions.filter(\.isRunning).count }
+    private var unseenSessionCount: Int { builder.sessions.filter(\.hasUnseenUpdate).count }
+
+    private var sessions: some View {
+        NavigationStack {
+            List {
+                ForEach(builder.recentSessions) { session in
+                    HStack(spacing: 8) {
+                        Button {
+                            stopSpeech(); promptFocused = false
+                            builder.selectSession(session.id); showingSessions = false
+                        } label: {
+                            sessionRow(session).contentShape(Rectangle())
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("session-\(session.id.uuidString)")
+                        .accessibilityAddTraits(builder.activeSessionID == session.id ? .isSelected : [])
+
+                        Button { requestClose(session) } label: {
+                            Image(systemName: "xmark").font(.caption.weight(.semibold)).foregroundStyle(Theme.muted)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain).disabled(session.sending)
+                        .accessibilityLabel("Close \(session.title)")
+                        .accessibilityIdentifier("close-session-\(session.id.uuidString)")
+                    }.listRowBackground(Color.clear)
+                }
+            }
+            .listStyle(.plain)
+            .overlay {
+                if builder.sessions.isEmpty {
+                    Text("No sessions yet.").font(.subheadline).foregroundStyle(Theme.muted)
+                }
+            }
+            .navigationTitle("Sessions")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingSessions = false } } }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 7) {
+                    Text("Closing a session keeps its website and build.")
+                        .font(.caption).foregroundStyle(Theme.muted)
+                    Button {
+                        stopSpeech(); promptFocused = false; builder.newWebsite(); builder.panel = .build
+                        showingSessions = false
+                    } label: {
+                        Label("New website", systemImage: "plus")
+                            .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                            .foregroundStyle(.white).background(Theme.actionBlue, in: Capsule())
+                    }.accessibilityIdentifier("session-new-website")
+                }
+                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 8).background(.bar)
+            }
+            .confirmationDialog(
+                "Close this session and discard its draft?",
+                isPresented: Binding(get: { pendingCloseSession != nil }, set: { if !$0 { pendingCloseSession = nil } }),
+                presenting: pendingCloseSession
+            ) { session in
+                Button("Close Session", role: .destructive) { closeSession(session) }
+                Button("Cancel", role: .cancel) { pendingCloseSession = nil }
+            } message: { _ in Text("Closing a session keeps its website and any submitted build.") }
+            .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private func sessionRow(_ session: BuilderSession) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 7) {
+                Text(session.title).font(.headline).foregroundStyle(.primary).lineLimit(2)
+                if builder.activeSessionID == session.id {
+                    Image(systemName: "checkmark.circle.fill").font(.caption).foregroundStyle(Theme.blue)
+                        .accessibilityLabel("Current session")
+                }
+                if session.hasUnseenUpdate {
+                    Circle().fill(Theme.blue).frame(width: 7, height: 7).accessibilityLabel("Unseen update")
+                }
+                Spacer(minLength: 0)
+            }
+            if !session.subtitle.isEmpty {
+                Text(session.subtitle).font(.subheadline).foregroundStyle(Theme.muted).lineLimit(2)
+            }
+            HStack(spacing: 6) {
+                if session.isRunning { ProgressView().controlSize(.mini) }
+                else if session.needsAttention { Image(systemName: "exclamationmark.circle").foregroundStyle(.orange) }
+                else if session.app == nil { Image(systemName: "pencil").foregroundStyle(Theme.muted) }
+                else { Image(systemName: "checkmark.circle").foregroundStyle(Theme.green) }
+                Text(session.status).lineLimit(1)
+            }.font(.caption).foregroundStyle(Theme.muted)
+        }
+    }
+
+    private func requestClose(_ session: BuilderSession) {
+        guard !session.sending else { return }
+        if !session.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { pendingCloseSession = session }
+        else { closeSession(session) }
+    }
+
+    private func closeSession(_ session: BuilderSession) {
+        _ = builder.closeSession(session.id)
+        pendingCloseSession = nil
+    }
+
+    private func stopSpeech() {
+        speech.stop()
+        speechSessionID = nil
     }
 
     private var websites: some View {
@@ -288,14 +440,15 @@ struct BuilderView: View {
                 if builder.apps.isEmpty { Text("No saved websites yet.").foregroundStyle(Theme.muted) }
                 ForEach(builder.apps) { app in
                     Button {
-                        speech.stop(); builder.open(app); panel = .build; showingWebsites = false
+                        stopSpeech(); builder.open(app); showingWebsites = false
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(app.name).font(.headline).foregroundStyle(.primary)
                             Text(app.prompt).font(.subheadline).foregroundStyle(Theme.muted).lineLimit(2)
                             Text(app.building ? "Building" : "Revision \(app.revision)").font(.caption).foregroundStyle(Theme.muted)
                         }.padding(.vertical, 4)
-                    }.disabled(builder.sending)
+                    }
+                    .accessibilityAddTraits(builder.selected?.id == app.id ? .isSelected : [])
                 }
             }.navigationTitle("Websites").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingWebsites = false } } }

@@ -61,6 +61,11 @@ struct BuildApp: Decodable, Identifiable {
     let activeTurnId: String?
     let preview: Preview?
     let turns: [BuildTurn]?
+    let updatedAt: String?
+    init(id: String, name: String, prompt: String, revision: Int, activeTurnId: String?, preview: Preview?, turns: [BuildTurn]?, updatedAt: String? = nil) {
+        self.id = id; self.name = name; self.prompt = prompt; self.revision = revision
+        self.activeTurnId = activeTurnId; self.preview = preview; self.turns = turns; self.updatedAt = updatedAt
+    }
     var building: Bool { activeTurnId != nil }
     var latestTurn: BuildTurn? { turns?.last }
     func previewURL(at date: Date = Date()) -> URL? {
@@ -70,6 +75,9 @@ struct BuildApp: Decodable, Identifiable {
 }
 
 struct BuildSnapshot: Decodable { let app: BuildApp }
+struct BuildInventory: Decodable { let apps: [BuildApp] }
+enum BuildProgressEvent { case apps([BuildApp]), app(BuildApp) }
+struct BuildStreamRetry: Error { let delay: TimeInterval }
 
 /// Incremental SSE parsing. An app event replaces a snapshot; it never appends
 /// duplicate messages. Comments and unrelated events do not change the app.
@@ -78,10 +86,23 @@ struct BuildEventParser {
     private var data: [String] = []
     private var size = 0
     mutating func consume(_ line: String) throws -> BuildApp? {
+        if case .app(let app) = try consumeProgress(line) { return app }
+        return nil
+    }
+    mutating func consumeProgress(_ line: String) throws -> BuildProgressEvent? {
         if line.isEmpty {
             defer { event = ""; data = []; size = 0 }
-            guard event == "app", !data.isEmpty else { return nil }
-            return try JSONDecoder().decode(BuildSnapshot.self, from: Data(data.joined(separator: "\n").utf8)).app
+            guard !data.isEmpty else { return nil }
+            let payload = Data(data.joined(separator: "\n").utf8)
+            switch event {
+            case "app": return .app(try JSONDecoder().decode(BuildSnapshot.self, from: payload).app)
+            case "apps":
+                let apps = try JSONDecoder().decode(BuildInventory.self, from: payload).apps
+                guard apps.count <= 50, Set(apps.map(\.id)).count == apps.count,
+                      apps.allSatisfy({ UUID(uuidString: $0.id) != nil }) else { throw BuildError.invalidProgress }
+                return .apps(apps)
+            default: return nil
+            }
         }
         if line.hasPrefix(":") { return nil }
         let fields = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
@@ -110,7 +131,7 @@ enum BuildError: LocalizedError {
             switch code {
             case "subscription_required", "insufficient_balance": return "Add compute credit in Account to build and run websites."
             case "spend_limit_exceeded": return "Your monthly spending limit cannot cover this build. Update your limit in Billing."
-            case "build_busy": return "Another build is running. Wait for it to finish."
+            case "build_busy": return "This website is already building. You can switch sessions or start another website."
             case "revision_conflict": return "This website changed elsewhere. Reconnect before sending your change."
             case "build_app_limit": return "You've reached the saved website limit. Manage your websites on the web."
             case "build_turn_limit": return "This website has reached its build limit. Start a new website."
@@ -197,6 +218,26 @@ struct BuildClient {
                 guard app.id == id, app.turns != nil else { throw BuildError.invalidProgress }
                 await onApp(app)
                 if !app.building { return }
+            }
+        }
+    }
+    func watchAll(onEvent: @MainActor (BuildProgressEvent) -> Void) async throws {
+        let (bytes, response) = try await session.bytes(for: makeRequest("events", stream: true))
+        guard let http = response as? HTTPURLResponse else { throw BuildError.invalidProgress }
+        if http.statusCode == 429 {
+            let delay = TimeInterval(http.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 60
+            throw BuildStreamRetry(delay: max(1, min(120, delay)))
+        }
+        guard (200..<300).contains(http.statusCode) else { throw BuildError.response(http.statusCode, "") }
+        guard http.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("text/event-stream") == true else { throw BuildError.invalidProgress }
+        var parser = BuildEventParser()
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            if let event = try parser.consumeProgress(line) {
+                if case .app(let app) = event {
+                    guard UUID(uuidString: app.id) != nil, app.turns != nil else { throw BuildError.invalidProgress }
+                }
+                await onEvent(event)
             }
         }
     }

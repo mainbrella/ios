@@ -82,7 +82,7 @@ import XCTest
         XCTAssertFalse(app.buttons["Projects"].exists)
         XCTAssertTrue(app.buttons["builder-submit"].isHittable)
         XCTAssertEqual(app.buttons["builder-submit"].label, "Build website")
-        XCTAssertFalse(app.buttons["builder-new-website"].exists)
+        XCTAssertTrue(app.buttons["builder-new-website"].exists)
         app.buttons["builder-websites"].tap()
         XCTAssertTrue(app.staticTexts["No saved websites yet."].waitForExistence(timeout: 5))
         app.buttons["Done"].tap()
@@ -137,6 +137,143 @@ import XCTest
         app.buttons["builder-account"].tap()
         app.buttons["Sign out"].tap()
         XCTAssertTrue(app.buttons["welcome-get-started"].waitForExistence(timeout: 10))
+    }
+
+    func testLocalBuilderConcurrentSessionsAndPersistence() throws {
+        guard ProcessInfo.processInfo.environment["MAINBRELLA_BUILDER_FIXTURE"] == "1" else {
+            throw XCTSkip("Start scripts/builder-fixture.py --port 8791 --build-seconds 45 and opt in with MAINBRELLA_BUILDER_FIXTURE=1, MAINBRELLA_BUILDER_FIXTURE_PORT=8791.")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["MAINBRELLA_BUILDER_FIXTURE_PORT"] = ProcessInfo.processInfo.environment["MAINBRELLA_BUILDER_FIXTURE_PORT"]
+        app.launch()
+        if app.buttons["builder-account"].exists {
+            app.buttons["builder-account"].tap()
+            if app.buttons["Sign out"].waitForExistence(timeout: 3) { app.buttons["Sign out"].tap() }
+            else if app.buttons["Done"].exists { app.buttons["Done"].tap() }
+        }
+        openSignIn(app)
+        app.textFields["login-email"].tap()
+        app.textFields["login-email"].typeText("builder@example.test")
+        app.secureTextFields["login-password"].tap()
+        app.secureTextFields["login-password"].typeText("fixture-password")
+        app.buttons["email-sign-in"].tap()
+        let prompt = app.descendants(matching: .any).matching(identifier: "builder-prompt").firstMatch
+        XCTAssertTrue(prompt.waitForExistence(timeout: 15))
+        guard prompt.exists else { return }
+        addTeardownBlock {
+            if app.buttons["builder-account"].exists {
+                app.buttons["builder-account"].tap()
+                if app.buttons["Sign out"].waitForExistence(timeout: 5) { app.buttons["Sign out"].tap() }
+            }
+        }
+
+        XCTAssertTrue(app.buttons["builder-new-website"].waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Make me a website about frogs")
+        app.buttons["builder-submit"].tap()
+        XCTAssertTrue(app.staticTexts["build-message-thought"].waitForExistence(timeout: 10))
+
+        // Starting Birds from the bottom action creates a second saved app
+        // while Frog is still running.
+        app.buttons["builder-new-website"].tap()
+        let birdPrompt = app.descendants(matching: .any).matching(identifier: "builder-prompt").firstMatch
+        XCTAssertTrue(birdPrompt.waitForExistence(timeout: 5))
+        birdPrompt.tap()
+        birdPrompt.typeText("Make me a website about birds")
+        app.buttons["builder-submit"].tap()
+        XCTAssertTrue(app.staticTexts["build-message-thought"].waitForExistence(timeout: 10))
+
+        app.buttons["builder-sessions"].tap()
+        let frogRow = sessionRow(app, named: "Frog Field Guide")
+        let birdRow = sessionRow(app, named: "Bird Field Guide")
+        XCTAssertTrue(frogRow.waitForExistence(timeout: 10))
+        XCTAssertTrue(birdRow.waitForExistence(timeout: 10))
+        XCTAssertTrue(frogRow.label.contains("Building"))
+        XCTAssertTrue(birdRow.label.contains("Building"))
+        let activeSessions = XCTAttachment(screenshot: app.screenshot())
+        activeSessions.name = UIDevice.current.userInterfaceIdiom == .pad ? "iPad concurrent builder sessions" : "iPhone concurrent builder sessions"
+        activeSessions.lifetime = .keepAlways
+        add(activeSessions)
+
+        // Reload with both builds active and confirm the server restores both.
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["builder-sessions"].waitForExistence(timeout: 15))
+        app.buttons["builder-sessions"].tap()
+        XCTAssertTrue(sessionRow(app, named: "Frog Field Guide").waitForExistence(timeout: 10))
+        XCTAssertTrue(sessionRow(app, named: "Bird Field Guide").waitForExistence(timeout: 10))
+        let restoredSessions = XCTAttachment(screenshot: app.screenshot())
+        restoredSessions.name = UIDevice.current.userInterfaceIdiom == .pad ? "iPad restored builder sessions" : "iPhone restored builder sessions"
+        restoredSessions.lifetime = .keepAlways
+        add(restoredSessions)
+        sessionRow(app, named: "Bird Field Guide").tap()
+
+        let birdDraft = "Add a migration map"
+        let birdComposer = app.descendants(matching: .any).matching(identifier: "builder-prompt").firstMatch
+        birdComposer.tap()
+        birdComposer.typeText(birdDraft)
+        app.buttons["builder-sessions"].tap()
+        sessionRow(app, named: "Frog Field Guide").tap()
+        let frogDraft = "Add a pond habitat map"
+        let frogComposer = app.descendants(matching: .any).matching(identifier: "builder-prompt").firstMatch
+        frogComposer.tap()
+        frogComposer.typeText(frogDraft)
+        app.buttons["builder-sessions"].tap()
+        sessionRow(app, named: "Bird Field Guide").tap()
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "builder-prompt").firstMatch.value as? String, birdDraft)
+        app.buttons["builder-sessions"].tap()
+        sessionRow(app, named: "Frog Field Guide").tap()
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "builder-prompt").firstMatch.value as? String, frogDraft)
+
+        // Closing a disposable draft prompts before discarding it and leaves
+        // both saved builds in the session list.
+        app.buttons["builder-new-website"].tap()
+        let discardedPrompt = app.descendants(matching: .any).matching(identifier: "builder-prompt").firstMatch
+        discardedPrompt.tap()
+        discardedPrompt.typeText("Temporary unsaved draft")
+        app.buttons["builder-sessions"].tap()
+        let closeDraft = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "close-session-"))
+            .matching(NSPredicate(format: "label CONTAINS %@", "Temporary unsaved draft")).firstMatch
+        XCTAssertTrue(closeDraft.waitForExistence(timeout: 5))
+        closeDraft.tap()
+        XCTAssertTrue(app.buttons["Close Session"].waitForExistence(timeout: 5))
+        app.buttons["Close Session"].tap()
+        XCTAssertTrue(sessionRow(app, named: "Frog Field Guide").exists)
+        XCTAssertTrue(sessionRow(app, named: "Bird Field Guide").exists)
+
+        // Completion updates Frog's row while Bird remains selected.
+        sessionRow(app, named: "Bird Field Guide").tap()
+        app.buttons["builder-sessions"].tap()
+        let completedFrog = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "session-"))
+            .matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Frog Field Guide", "Preview ready")).firstMatch
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "Preview ready"), object: completedFrog)], timeout: 70), .completed)
+        XCTAssertTrue(sessionRow(app, named: "Bird Field Guide").isSelected)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["Bird Field Guide"].exists)
+
+        // Keep the embedded website's interaction state when switching away
+        // from and back to its session.
+        app.buttons["builder-sessions"].tap()
+        sessionRow(app, named: "Frog Field Guide").tap()
+        if app.segmentedControls["builder-panels"].exists {
+            app.segmentedControls["builder-panels"].buttons["Preview"].tap()
+        }
+        XCTAssertTrue(app.webViews.staticTexts["Frog Field Guide"].waitForExistence(timeout: 15))
+        app.webViews.buttons["Meet the frogs"].tap()
+        XCTAssertTrue(app.webViews.buttons["Spring peeper, tree frog, bullfrog"].waitForExistence(timeout: 5))
+        app.buttons["builder-sessions"].tap()
+        sessionRow(app, named: "Bird Field Guide").tap()
+        app.buttons["builder-sessions"].tap()
+        sessionRow(app, named: "Frog Field Guide").tap()
+        if app.segmentedControls["builder-panels"].exists {
+            app.segmentedControls["builder-panels"].buttons["Preview"].tap()
+        }
+        XCTAssertTrue(app.webViews.buttons["Spring peeper, tree frog, bullfrog"].waitForExistence(timeout: 5))
+    }
+
+    private func sessionRow(_ app: XCUIApplication, named name: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "session-"))
+            .matching(NSPredicate(format: "label CONTAINS %@", name)).firstMatch
     }
 
     func testProductionWorkflow() throws {
